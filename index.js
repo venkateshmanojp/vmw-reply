@@ -4,78 +4,56 @@ const app     = express();
 
 app.use(express.json());
 
-// ── CONFIG ────────────────────────────────────────────────
-const VERIFY_TOKEN      = "Venky@1234";
-const APPS_SCRIPT_URL   = "https://script.google.com/macros/s/AKfycbytDsEm2Z1_JD1Gpn-faYSdF1lVMIXxotMQ3qcB4P_7QIZC3juK8PZuhSTinkdlhASdEA/exec";
+const VERIFY_TOKEN    = "Venky@1234";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbytDsEm2Z1_JD1Gpn-faYSdF1lVMIXxotMQ3qcB4P_7QIZC3juK8PZuhSTinkdlhASdEA/exec";
 
-// ── META WEBHOOK VERIFICATION ─────────────────────────────
 app.get('/webhook', (req, res) => {
+  console.log('GET /webhook:', req.query);
   const mode      = req.query['hub.mode'];
   const token     = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
-
-  console.log('Verification request:', { mode, token });
-
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('✅ Webhook verified!');
+    console.log('✅ Verified!');
     res.status(200).send(challenge);
   } else {
-    console.log('❌ Verification failed!');
+    console.log('❌ Failed!');
     res.sendStatus(403);
   }
 });
 
-// ── INCOMING WHATSAPP MESSAGES ────────────────────────────
 app.post('/webhook', (req, res) => {
+  console.log('📨 POST /webhook received!');
+  console.log('Body:', JSON.stringify(req.body));
   try {
     const body = req.body;
-
     if (body.entry) {
-      const entry   = body.entry[0];
-      const changes = entry?.changes?.[0];
-      const value   = changes?.value;
-      const messages= value?.messages;
-
-      if (messages && messages.length > 0) {
-        const msg    = messages[0];
+      const msg = body.entry[0]?.changes?.[0]?.value?.messages?.[0];
+      if (msg) {
         const mobile = msg.from || '';
         const text   = msg.text?.body || '';
-
-        console.log('📱 Message from:', mobile, '→', text);
-
-        // Forward to Apps Script
+        console.log('📱 From:', mobile, '→', text);
         if (mobile && text) {
           const url = APPS_SCRIPT_URL +
             '?action=storeMessage' +
             '&mobile=' + encodeURIComponent(mobile) +
             '&message=' + encodeURIComponent(text);
-
           fetch(url)
             .then(r => r.json())
             .then(d => console.log('✅ Stored:', d))
-            .catch(e => console.log('❌ Store error:', e));
+            .catch(e => console.log('❌ Error:', e.message));
         }
       }
     }
-
     res.sendStatus(200);
-
   } catch (err) {
-    console.error('Webhook error:', err);
-    res.sendStatus(200); // Always return 200 to Meta!
+    console.error('Error:', err.message);
+    res.sendStatus(200);
   }
 });
 
-// ── HEALTH CHECK ──────────────────────────────────────────
 app.get('/', (req, res) => {
-  res.json({
-    status  : 'VMW Webhook Relay Running! ✅',
-    version : '1.0'
-  });
+  res.json({status: 'VMW Relay Running ✅', version: '1.0'});
 });
 
-// ── START SERVER ──────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✅ VMW Relay running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(✅ Running on port ${PORT}));
