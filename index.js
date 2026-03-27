@@ -39,15 +39,36 @@ app.post("/webhook", async (req, res) => {
       if (message) {
         const from = message.from;
         const text = message.text?.body;
-        let keyword = text?.toLowerCase().trim();
+        if (message) {
+  const from = message.from;
+  const text = message.text?.body;
 
-if (keyword.includes("loan")) {
-  keyword = "LOAN";
-} else {
-  keyword = "UNKNOWN";
-}
+  // 🔥 STEP 1: TEMPLATE LOGIC
+  let templateName = "";
+  const msg = text.toLowerCase();
 
-console.log(`Message from: ${from} → ${text}`);
+  if (msg.includes("home loan") || msg.includes("hl")) {
+    templateName = "welcome_hl";
+  }
+  else if (msg.includes("loan against property") || msg.includes("lap")) {
+    templateName = "welcome_lap";
+  }
+  else if (
+    msg.includes("personal loan") ||
+    msg.includes("business loan") ||
+    msg.includes("pl") ||
+    msg.includes("bl")
+  ) {
+    templateName = "welcome_unsecured";
+  }
+  else if (msg.includes("loan")) {
+    templateName = "form_reminder";
+  }
+  else {
+    templateName = "welcome_hi";
+  }
+
+       console.log(`Message from: ${from} → ${text}`);
 
 // SEND TO APPS SCRIPT
 await fetch(process.env.APPS_SCRIPT_URL, {
