@@ -35,7 +35,8 @@ app.post("/webhook", async (req, res) => {
 
       // ✅ SEND TEMPLATE (GUARANTEED DELIVERY)
      await fetch(
-  `https://graph.facebook.com/v18.0/${process.env.966242066580030}/messages`,
+  `https://graph.facebook.com/v18.0/${process.env.966242066580030}/messages`
+,
   {
     method: "POST",
     headers: {
