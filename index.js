@@ -36,12 +36,24 @@ app.post("/webhook", async (req, res) => {
       const changes = entry?.changes?.[0];
       const message = changes?.value?.messages?.[0];
 
-      if (message) {
-        const from = message.from;
-        const text = message.text?.body;
-        if (message) {
-  const from = message.from;
-  const text = message.text?.body;
+     
+  // 🔥 STEP 1: TEMPLATE LOGIC
+  let templateName = "";
+  const msg = text?.toLowerCase() || "";
+
+  if (msg.includes("home loan") || msg.includes("hl")) {
+    templateName = "welcome_hl";
+  } 
+  else if (msg.includes("loan against property") || msg.includes("lap")) {
+    templateName = "welcome_lap";
+  } 
+  else if (msg.includes("personal loan") || msg.includes("business loan")) {
+    templateName = "welcome_unsecured";
+  } 
+  else {
+    templateName = "welcome_hi";
+  }
+
 
   // 🔥 STEP 1: TEMPLATE LOGIC
   let templateName = "";
