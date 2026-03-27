@@ -94,18 +94,25 @@ if (keyword === "LOAN") {
   replyMessage = "Welcome to VastMyWealth 😊\nType LOAN to get started.";
 }
 
-const response = await fetch(`https://graph.facebook.com/v18.0/966242066580030/messages`, {
+const response = await fetch(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
   method: "POST",
   headers: {
-    "Authorization": `Bearer EAANJuuOCZCvsBRPDXhmqRKZCmL4yFoiMZCoWRKDLg6ZCCz2mwMZCv6TBPzkfrbKli9BEHEY75XqIRM3QizWncmIPzqlCuBd2tiXpZB1tgA0tQLT5xDy0bbZC3rMKmSErKL0mj42hGnDfChJqMcebCDOPntgXMCkjX3jCUYJ73ClI6WOv3ej8dlVOGF4ZCCQWMyZAi3AZDZD`,
+    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
     messaging_product: "whatsapp",
     to: from,
-    text: { body: replyMessage }
+    type: "template",
+    template: {
+      name: templateName,   // 👈 dynamic (welcome_hl, welcome_lap, etc.)
+      language: {
+        code: "en"
+      }
+    }
   })
 });
+
 
 const result = await response.json();
 console.log("WHATSAPP RESPONSE:", result);
