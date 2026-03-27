@@ -3,24 +3,23 @@ import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json());
-
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
-// ✅ WEBHOOK VERIFICATION (Meta setup)
+// ✅ VERIFY WEBHOOK
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
   if (mode && token === VERIFY_TOKEN) {
-    console.log("✅ Webhook verified");
+    console.log("Webhook verified");
     return res.status(200).send(challenge);
   } else {
     return res.sendStatus(403);
   }
 });
 
-// ✅ MAIN WEBHOOK (Incoming messages)
+// ✅ RECEIVE MESSAGE
 app.post("/webhook", async (req, res) => {
   try {
     const entry = req.body.entry?.[0];
@@ -31,20 +30,9 @@ app.post("/webhook", async (req, res) => {
       const from = message.from;
       const text = message.text?.body;
 
-      console.log(`📩 Message from ${from}: ${text}`);
+      console.log(`Message from ${from}: ${text}`);
 
-      // ✅ GREETING MESSAGE (FINAL)
-      const replyText = `✅ Request Received Successfully
-
-Thank you! We’ve recorded your requirement.
-
-👨‍💼 Our loan expert will connect with you shortly.
-
-📞 Expect a call or WhatsApp update soon.
-
-💬 Need faster help? Type FREE HELP anytime.`;
-
-      // ✅ SEND MESSAGE TO WHATSAPP
+      // ✅ SEND TEMPLATE (GUARANTEED DELIVERY)
       await fetch(
         `https://graph.facebook.com/v18.0/${process.env.966242066580030}/messages`,
         {
@@ -56,19 +44,22 @@ Thank you! We’ve recorded your requirement.
           body: JSON.stringify({
             messaging_product: "whatsapp",
             to: from,
-            type: "text",
-            text: {
-              body: replyText,
-            },
+            type: "template",
+            template: {
+              name: "welcome_unsecured",   // 👈 your approved template
+              language: {
+                code: "en"
+              }
+            }
           }),
         }
       );
 
-      console.log("✅ Reply sent");
+      console.log("Template sent");
 
-      // ✅ STORE IN GOOGLE SHEET (Optional)
+      // ✅ STORE IN SHEET
       if (process.env.APPS_SCRIPT_URL) {
-        await fetch(process.env.https://script.google.com/macros/s/AKfycbytDsEm2Z1_JD1Gpn-faYSdF1lVMIXxotMQ3qcB4P_7QIZC3juK8PZuhSTinkdlhASdEA/exec, {
+        await fetch(process.env.APPS_SCRIPT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -78,20 +69,16 @@ Thank you! We’ve recorded your requirement.
             message: text,
           }),
         });
-
-        console.log("📄 Stored in Google Sheet");
       }
     }
 
     res.sendStatus(200);
-  } catch (error) {
-    console.error("❌ Error:", error);
+  } catch (err) {
+    console.error(err);
     res.sendStatus(500);
   }
 });
 
-// ✅ START SERVER
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+app.listen(process.env.PORT || 10000, () => {
+  console.log("Server running");
 });
