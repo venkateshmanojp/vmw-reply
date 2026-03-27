@@ -46,19 +46,11 @@ if (keyword.includes("loan")) {
 } else {
   keyword = "UNKNOWN";
 }
-let replyMessage = "";
 
-if (keyword === "LOAN") {
-  replyMessage = "💰 Loan Required?\n\nGet best offers within 24 hrs.\n\n👉 Fill form: YOUR_FORM_LINK\n\nType FREE HELP if stuck.";
-} else {
-  replyMessage = "👋 Welcome to VastMyWealth!\n\nType LOAN to get started.\n\nOr type FREE HELP.";
-}
+console.log(`Message from: ${from} → ${text}`);
 
-
-        console.log(`Message from: ${from} → ${text}`);
-
-        // SEND TO APPS SCRIPT
-       await fetch(process.env.APPS_SCRIPT_URL, {
+// SEND TO APPS SCRIPT
+await fetch(process.env.APPS_SCRIPT_URL, {
   method: "POST",
   headers: {
     "Content-Type": "application/json"
@@ -72,7 +64,7 @@ if (keyword === "LOAN") {
 console.log("Stored successfully");
 
 
-// 🔥 STEP 3 STARTS HERE (ADD THIS)
+// ✅ ONLY ONE DECLARATION
 let replyMessage = "";
 
 if (keyword === "LOAN") {
