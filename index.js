@@ -76,7 +76,7 @@ if (keyword === "LOAN") {
 const response = await fetch(`https://graph.facebook.com/v18.0/966242066580030/messages`, {
   method: "POST",
   headers: {
-    "Authorization": `EAANJuuOCZCvsBRPDXhmqRKZCmL4yFoiMZCoWRKDLg6ZCCz2mwMZCv6TBPzkfrbKli9BEHEY75XqIRM3QizWncmIPzqlCuBd2tiXpZB1tgA0tQLT5xDy0bbZC3rMKmSErKL0mj42hGnDfChJqMcebCDOPntgXMCkjX3jCUYJ73ClI6WOv3ej8dlVOGF4ZCCQWMyZAi3AZDZD`,
+    "Authorization": `Bearer EAANJuuOCZCvsBRPDXhmqRKZCmL4yFoiMZCoWRKDLg6ZCCz2mwMZCv6TBPzkfrbKli9BEHEY75XqIRM3QizWncmIPzqlCuBd2tiXpZB1tgA0tQLT5xDy0bbZC3rMKmSErKL0mj42hGnDfChJqMcebCDOPntgXMCkjX3jCUYJ73ClI6WOv3ej8dlVOGF4ZCCQWMyZAi3AZDZD`,
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
