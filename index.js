@@ -58,19 +58,46 @@ if (keyword === "LOAN") {
         console.log(`Message from: ${from} → ${text}`);
 
         // SEND TO APPS SCRIPT
-        await fetch(process.env.APPS_SCRIPT_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            mobile: from,
-            message: text
-          })
-        });
+       await fetch(process.env.APPS_SCRIPT_URL, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    mobile: from,
+    message: text
+  })
+});
 
-        console.log("Stored successfully");
-        await fetch(`https://graph.facebook.com/v18.0/966242066580030/messages`, {
+console.log("Stored successfully");
+
+
+// 🔥 STEP 3 STARTS HERE (ADD THIS)
+let replyMessage = "";
+
+if (keyword === "LOAN") {
+  replyMessage = "Great! Please share your loan requirement.\n\nType:\n1. Personal Loan\n2. Business Loan\n3. Loan Against Property";
+} else {
+  replyMessage = "Welcome to VastMyWealth 😊\nType LOAN to get started.";
+}
+
+const response = await fetch(`https://graph.facebook.com/v18.0/966242066580030/messages`, {
+  method: "POST",
+  headers: {
+    "Authorization": `EAANJuuOCZCvsBRPDXhmqRKZCmL4yFoiMZCoWRKDLg6ZCCz2mwMZCv6TBPzkfrbKli9BEHEY75XqIRM3QizWncmIPzqlCuBd2tiXpZB1tgA0tQLT5xDy0bbZC3rMKmSErKL0mj42hGnDfChJqMcebCDOPntgXMCkjX3jCUYJ73ClI6WOv3ej8dlVOGF4ZCCQWMyZAi3AZDZD`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    messaging_product: "whatsapp",
+    to: from,
+    text: { body: replyMessage }
+  })
+});
+
+const result = await response.json();
+console.log("WHATSAPP RESPONSE:", result);
+// 🔥 STEP 3 ENDS HERE
+ await fetch(`https://graph.facebook.com/v18.0/966242066580030/messages`, {
   method: "POST",
   headers: {
     "Authorization": `EAANJuuOCZCvsBRPDXhmqRKZCmL4yFoiMZCoWRKDLg6ZCCz2mwMZCv6TBPzkfrbKli9BEHEY75XqIRM3QizWncmIPzqlCuBd2tiXpZB1tgA0tQLT5xDy0bbZC3rMKmSErKL0mj42hGnDfChJqMcebCDOPntgXMCkjX3jCUYJ73ClI6WOv3ej8dlVOGF4ZCCQWMyZAi3AZDZD`,
