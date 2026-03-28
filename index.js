@@ -12,7 +12,7 @@ app.use(express.json());
 // ============================================================
 // ENVIRONMENT VARIABLES (set in Render dashboard)
 // VERIFY_TOKEN     — myverify123
-// WHATSAPP_TOKEN   — EAANJuuOCZCvsBRLESBVoBdk55PvTJauJVwmtdkQmaE8pE2rM37ZBkd49kYm4m1e5IZBMU6WjpV9uLi8R6aPJH25KLkRXPXlyR5ZCYffCJguh9ksg2vMxlBHin2LP8hmIOMw2Rcum0goUUZBUuahmeOxZBBmF9764nIlzIG4blRe5b3m3ZBR2jRfmrkzDsLUuNISabRfqMzEC1EnsULTRMQAFIGtZBvds3ZA8lVoZCpfEPEsPcVeXjUeMsZAlsx4YD6d6ZC6fIn4a4NA153Ga6M7ZCCNPYbStb
+// WHATSAPP_TOKEN   — EAANJuuOCZCvsBRGPgTiqruItvYK1hLjgvEXm0RErZBUSVZCJ2k658TieW3znqp4UC1kOzZCQAhTCVG9BZBodZAPQTZBymOd3BfQrSE1z3o4vUCMfn23ce80gsipYr5ePbTdUpmdBVtCSBB1o90GuHVZAQPbosz5VCLDQ5t5OJeDKY0ZCkZAA5fuNaR61Tzr34giDp2WwZDZD
 // PHONE_NUMBER_ID  — 966242066580030
 // APPS_SCRIPT_URL  — https://script.google.com/macros/s/AKfycbytDsEm2Z1_JD1Gpn-faYSdF1lVMIXxotMQ3qcB4P_7QIZC3juK8PZuhSTinkdlhASdEA/exec
 // ============================================================
