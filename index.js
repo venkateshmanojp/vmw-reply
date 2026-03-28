@@ -1,63 +1,192 @@
-const express = require("express");
-const fetch = require("node-fetch");
+// ============================================================
+// VastMyWealth – Render Relay Server v2
+// Fixes: Template sending, loan detection, Apps Script GET
+// ============================================================
 
-const app = express();
+const express = require("express");
+const fetch   = require("node-fetch");
+const app     = express();
+
 app.use(express.json());
 
-// Webhook verification (Meta setup)
+// ============================================================
+// ENVIRONMENT VARIABLES (set in Render dashboard)
+// VERIFY_TOKEN     — myverify123
+// WHATSAPP_TOKEN   — EAANJuuOCZCvsBRLESBVoBdk55PvTJauJVwmtdkQmaE8pE2rM37ZBkd49kYm4m1e5IZBMU6WjpV9uLi8R6aPJH25KLkRXPXlyR5ZCYffCJguh9ksg2vMxlBHin2LP8hmIOMw2Rcum0goUUZBUuahmeOxZBBmF9764nIlzIG4blRe5b3m3ZBR2jRfmrkzDsLUuNISabRfqMzEC1EnsULTRMQAFIGtZBvds3ZA8lVoZCpfEPEsPcVeXjUeMsZAlsx4YD6d6ZC6fIn4a4NA153Ga6M7ZCCNPYbStb
+// PHONE_NUMBER_ID  — 966242066580030
+// APPS_SCRIPT_URL  — https://script.google.com/macros/s/AKfycbytDsEm2Z1_JD1Gpn-faYSdF1lVMIXxotMQ3qcB4P_7QIZC3juK8PZuhSTinkdlhASdEA/exec
+// ============================================================
+
+// ============================================================
+// TEMPLATE MAP — matches your approved Meta templates
+// ============================================================
+const TEMPLATES = {
+  "Personal Loan"        : "welcome_unsecured",
+  "Business Loan"        : "welcome_unsecured",
+  "Home Loan"            : "welcome_hl",
+  "Loan Against Property": "welcome_lap"
+};
+
+// ============================================================
+// DETECT LOAN TYPE FROM MESSAGE
+// ============================================================
+function detectLoanType(text) {
+  if (!text) return "Personal Loan";
+  const t = text.toUpperCase();
+  if (t.includes("HOME")     || t.includes("#HL"))  return "Home Loan";
+  if (t.includes("BUSINESS") || t.includes("#BL"))  return "Business Loan";
+  if (t.includes("PROPERTY") || t.includes("#LAP") || t.includes("LAP")) return "Loan Against Property";
+  if (t.includes("PERSONAL") || t.includes("#PL"))  return "Personal Loan";
+  return "Personal Loan"; // default
+}
+
+// ============================================================
+// SEND WHATSAPP TEMPLATE — approved templates only
+// ============================================================
+async function sendTemplate(to, templateName) {
+  try {
+    const url = `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`;
+
+    const payload = {
+      messaging_product: "whatsapp",
+      to               : to,
+      type             : "template",
+      template         : {
+        name    : templateName,
+        language: { code: "en" }
+      }
+    };
+
+    const res  = await fetch(url, {
+      method : "POST",
+      headers: {
+        "Authorization" : `Bearer ${process.env.WHATSAPP_TOKEN}`,
+        "Content-Type"  : "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (data.messages) {
+      console.log(`✅ Template sent: ${templateName} → ${to}`);
+      return true;
+    } else {
+      console.error("❌ Template failed:", JSON.stringify(data));
+      return false;
+    }
+
+  } catch (err) {
+    console.error("❌ sendTemplate error:", err.message);
+    return false;
+  }
+}
+
+// ============================================================
+// STORE IN APPS SCRIPT — via GET request
+// ============================================================
+async function storeInAppsScript(mobile, message) {
+  try {
+    if (!process.env.APPS_SCRIPT_URL) return;
+
+    const url = process.env.APPS_SCRIPT_URL
+      + "?action=storeMessage"
+      + "&mobile=" + encodeURIComponent(mobile)
+      + "&message=" + encodeURIComponent(message || "");
+
+    const res = await fetch(url, { method: "GET" });
+    const data = await res.json();
+
+    if (data.success) {
+      console.log("✅ Stored in Apps Script:", mobile);
+    } else {
+      console.error("❌ Apps Script store failed:", JSON.stringify(data));
+    }
+
+  } catch (err) {
+    console.error("❌ storeInAppsScript error:", err.message);
+  }
+}
+
+// ============================================================
+// 1. WEBHOOK VERIFICATION — Meta setup
+// ============================================================
 app.get("/webhook", (req, res) => {
-  const verify_token = process.env.myverify123;
+  const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
   if (
-    req.query["hub.mode"] === "subscribe" &&
-    req.query["hub.verify_token"] === verify_token
+    req.query["hub.mode"]         === "subscribe" &&
+    req.query["hub.verify_token"] === VERIFY_TOKEN
   ) {
+    console.log("✅ Webhook verified!");
     return res.send(req.query["hub.challenge"]);
   }
 
+  console.error("❌ Webhook verification failed!");
   res.sendStatus(403);
 });
 
-// Incoming messages
+// ============================================================
+// 2. RECEIVE INCOMING WHATSAPP MESSAGE
+// ============================================================
 app.post("/webhook", async (req, res) => {
+
+  // Always respond 200 immediately — Meta requires this!
+  res.sendStatus(200);
+
   try {
-    const message =
-      req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const entry   = req.body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value   = changes?.value;
 
-    if (!message) return res.sendStatus(200);
+    // Ignore status updates (delivered, read etc)
+    if (value?.statuses) return;
 
-    const from = message.from;
+    const message = value?.messages?.[0];
+    if (!message) return;
 
-    console.log("Message received from:", from);
+    // Only handle text messages
+    if (message.type !== "text") {
+      console.log("⚠️ Non-text message received — ignored");
+      return;
+    }
 
-    // 🔥 SIMPLE ACK MESSAGE
-    await fetch(
-      `https://graph.facebook.com/v18.0/${process.env.966242066580030}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.EAANJuuOCZCvsBRLESBVoBdk55PvTJauJVwmtdkQmaE8pE2rM37ZBkd49kYm4m1e5IZBMU6WjpV9uLi8R6aPJH25KLkRXPXlyR5ZCYffCJguh9ksg2vMxlBHin2LP8hmIOMw2Rcum0goUUZBUuahmeOxZBBmF9764nIlzIG4blRe5b3m3ZBR2jRfmrkzDsLUuNISabRfqMzEC1EnsULTRMQAFIGtZBvds3ZA8lVoZCpfEPEsPcVeXjUeMsZAlsx4YD6d6ZC6fIn4a4NA153Ga6M7ZCCNPYbStb}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: from,
-          text: {
-            body: "✅ Request received. Our team will contact you shortly. Type FREE HELP anytime."
-          }
-        })
-      }
-    );
+    const from = message.from;           // customer mobile e.g. 919594592020
+    const text = message.text?.body || "";
 
-    console.log("Reply sent");
+    console.log(`📩 Incoming from ${from}: ${text}`);
 
-    res.sendStatus(200);
-  } catch (error) {
-    console.error("Error:", error);
-    res.sendStatus(500);
+    // ── STEP 1: Detect loan type ──────────────────────────
+    const loanType    = detectLoanType(text);
+    const templateName= TEMPLATES[loanType] || "welcome_unsecured";
+
+    console.log(`💡 Detected: ${loanType} → Template: ${templateName}`);
+
+    // ── STEP 2: Send welcome template ─────────────────────
+    await sendTemplate(from, templateName);
+
+    // ── STEP 3: Store in Apps Script ──────────────────────
+    await storeInAppsScript(from, text);
+
+  } catch (err) {
+    console.error("❌ Webhook error:", err.message);
   }
 });
 
-app.listen(process.env.PORT || 10000, () => {
-  console.log("Server running");
+// ============================================================
+// 3. HEALTH CHECK
+// ============================================================
+app.get("/", (req, res) => {
+  res.json({
+    status : "✅ VastMyWealth Relay Running",
+    version: "v2"
+  });
+});
+
+// ============================================================
+// 4. START SERVER
+// ============================================================
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`🚀 VastMyWealth Relay running on port ${PORT}`);
 });
