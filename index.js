@@ -27,8 +27,8 @@ app.use(express.json());
 // TEMPLATE MAP
 // ============================================================
 const TEMPLATES = {
-  "Personal Loan"        : "digital_journey",
-  "Business Loan"        : "digital_journey",
+  "Personal Loan"        : "welcome_unsecured",
+  "Business Loan"        : "welcome_unsecured",
   "Home Loan"            : "welcome_hl",
   "Loan Against Property": "welcome_lap"
 };
