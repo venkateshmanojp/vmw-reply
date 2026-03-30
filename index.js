@@ -193,12 +193,12 @@ app.post("/webhook", async (req, res) => {
     await storeInAppsScript(from, text);
 
     // ── STEP 2: Check if template already sent ────────────
-    const alreadySent = await isAlreadyInWALeads(from);
+    const alreadySent = await isTemplateAlreadySent(from);
 
-    if (alreadySent) {
-      console.log(`⏭️ Already in WA Leads — skipping template: ${from}`);
-      return;
-    }
+if (alreadySent) {
+  console.log(`⏭️ Template already sent — skipping: ${from}`);
+  return;
+}
 
     // ── STEP 3: Detect loan type (for logging only) ───────
     const loanType = detectLoanType(text);
