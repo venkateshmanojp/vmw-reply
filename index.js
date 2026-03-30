@@ -27,10 +27,10 @@ app.use(express.json());
 // TEMPLATE MAP
 // ============================================================
 const TEMPLATES = {
-  "Personal Loan"        : "welcome_unsecured",
-  "Business Loan"        : "welcome_unsecured",
-  "Home Loan"            : "welcome_hl",
-  "Loan Against Property": "welcome_lap"
+  "Personal Loan"        : "welcome",
+  "Business Loan"        : "welcome",
+  "Home Loan"            : "welcome",
+  "Loan Against Property": "welcome"
 };
 
 // ============================================================
