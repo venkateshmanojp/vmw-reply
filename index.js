@@ -1,12 +1,11 @@
 // ============================================================
-// VastMyWealth – Render Relay Server v3
+// VastMyWealth – Render Relay Server v4
 // Updated : March 2026
 //
-// FIXES:
-// - Template only sent ONCE per customer (dedup check)
-// - Correct template per loan type
-// - Apps Script storage via GET
-// - Immediate 200 response to Meta
+// FLOW:
+// Customer messages WhatsApp → store message →
+// Check if template already sent →
+// If not sent → send "welcome" template (same for all loan types)
 // ============================================================
 
 const express = require("express");
@@ -24,69 +23,52 @@ app.use(express.json());
 // ============================================================
 
 // ============================================================
-// TEMPLATE MAP
+// ONE TEMPLATE FOR ALL — welcome template
 // ============================================================
-const TEMPLATES = {
-  "Personal Loan"        : "welcome",
-  "Business Loan"        : "welcome",
-  "Home Loan"            : "welcome",
-  "Loan Against Property": "welcome"
-};
+const WELCOME_TEMPLATE = "welcome";
 
 // ============================================================
-// DETECT LOAN TYPE — Fuzzy matching
+// DETECT LOAN TYPE — Fuzzy matching (for storage only)
 // ============================================================
 function detectLoanType(text) {
   if (!text) return "Personal Loan";
   const t = text.toUpperCase().trim();
-
   if (t.includes("HOME")     || t === "HL"  || t.includes("#HL"))  return "Home Loan";
   if (t.includes("BUSINESS") || t === "BL"  || t.includes("#BL"))  return "Business Loan";
   if (t.includes("PROPERTY") || t === "LAP" || t.includes("#LAP") ||
       t.includes("AGAINST")  || t.includes("MORTG"))               return "Loan Against Property";
   if (t.includes("PERSONAL") || t === "PL"  || t.includes("#PL"))  return "Personal Loan";
-
-  return "Personal Loan"; // default
+  return "Personal Loan";
 }
 
 // ============================================================
 // CHECK IF TEMPLATE ALREADY SENT
-// Calls Apps Script to check WA Leads tab
-// Returns true if already sent — skip template
 // ============================================================
 async function isTemplateAlreadySent(mobile) {
   try {
     if (!process.env.APPS_SCRIPT_URL) return false;
-
-    const url      = process.env.APPS_SCRIPT_URL + "?mobile=" + encodeURIComponent(mobile);
-    const res      = await fetch(url);
-    const data     = await res.json();
-
-    // If customer already in system (form filled or WA stored) = template sent before
+    const url  = process.env.APPS_SCRIPT_URL + "?mobile=" + encodeURIComponent(mobile);
+    const res  = await fetch(url);
+    const data = await res.json();
     console.log(`🔍 Template check for ${mobile}: filled=${data.filled}`);
     return data.filled === true;
-
   } catch (err) {
     console.error("❌ isTemplateAlreadySent error:", err.message);
-    return false; // If check fails — allow template (safe default)
+    return false;
   }
 }
 
 // ============================================================
 // CHECK IF ALREADY IN WA LEADS
-// Separate check specifically for WA Leads tab
 // ============================================================
 async function isAlreadyInWALeads(mobile) {
   try {
     if (!process.env.APPS_SCRIPT_URL) return false;
-
     const url  = process.env.APPS_SCRIPT_URL +
       "?action=checkWALead&mobile=" + encodeURIComponent(mobile);
     const res  = await fetch(url);
     const data = await res.json();
-
     return data.exists === true;
-
   } catch (err) {
     console.error("❌ isAlreadyInWALeads error:", err.message);
     return false;
@@ -96,18 +78,9 @@ async function isAlreadyInWALeads(mobile) {
 // ============================================================
 // SEND WHATSAPP TEMPLATE
 // ============================================================
-async function sendTemplate(to, templateName, firstName) {
+async function sendTemplate(to, templateName) {
   try {
     const url = `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`;
-
-    // Build components — digital_journey needs first name variable
-    const components = [];
-    if (templateName === "digital_journey" && firstName) {
-      components.push({
-        type      : "body",
-        parameters: [{ type: "text", text: firstName }]
-      });
-    }
 
     const payload = {
       messaging_product: "whatsapp",
@@ -116,7 +89,7 @@ async function sendTemplate(to, templateName, firstName) {
       template         : {
         name      : templateName,
         language  : { code: "en" },
-        components: components
+        components: []
       }
     };
 
@@ -151,21 +124,17 @@ async function sendTemplate(to, templateName, firstName) {
 async function storeInAppsScript(mobile, message) {
   try {
     if (!process.env.APPS_SCRIPT_URL) return;
-
     const url = process.env.APPS_SCRIPT_URL +
       "?action=storeMessage" +
       "&mobile=" + encodeURIComponent(mobile) +
       "&message=" + encodeURIComponent(message || "");
-
     const res  = await fetch(url);
     const data = await res.json();
-
     if (data.success) {
       console.log("✅ Stored in Apps Script:", mobile);
     } else {
       console.error("❌ Store failed:", JSON.stringify(data));
     }
-
   } catch (err) {
     console.error("❌ storeInAppsScript error:", err.message);
   }
@@ -176,7 +145,6 @@ async function storeInAppsScript(mobile, message) {
 // ============================================================
 app.get("/webhook", (req, res) => {
   const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-
   if (
     req.query["hub.mode"]         === "subscribe" &&
     req.query["hub.verify_token"] === VERIFY_TOKEN
@@ -184,7 +152,6 @@ app.get("/webhook", (req, res) => {
     console.log("✅ Webhook verified!");
     return res.send(req.query["hub.challenge"]);
   }
-
   console.error("❌ Webhook verification failed!");
   res.sendStatus(403);
 });
@@ -202,9 +169,9 @@ app.post("/webhook", async (req, res) => {
     const changes = entry?.changes?.[0];
     const value   = changes?.value;
 
-    // Ignore status updates (delivered, read etc)
+    // Ignore status updates
     if (value?.statuses) {
-      console.log("📊 Status update received — ignored");
+      console.log("📊 Status update — ignored");
       return;
     }
 
@@ -217,34 +184,29 @@ app.post("/webhook", async (req, res) => {
       return;
     }
 
-    const from      = message.from;  // e.g. 919594592020
-    const text      = message.text?.body || "";
+    const from = message.from;
+    const text = message.text?.body || "";
 
     console.log(`📩 Incoming from ${from}: "${text}"`);
 
-    // ── STEP 1: Always store message first ────────────────
+    // ── STEP 1: Store message ─────────────────────────────
     await storeInAppsScript(from, text);
 
     // ── STEP 2: Check if template already sent ────────────
-    const alreadySent = await isTemplateAlreadySent(from);
+    const alreadySent = await isAlreadyInWALeads(from);
 
     if (alreadySent) {
-      console.log(`⏭️ Template already sent to ${from} — skipping`);
+      console.log(`⏭️ Already in WA Leads — skipping template: ${from}`);
       return;
     }
 
-    // ── STEP 3: Detect loan type ──────────────────────────
-    const loanType     = detectLoanType(text);
-    const templateName = TEMPLATES[loanType] || "digital_journey";
+    // ── STEP 3: Detect loan type (for logging only) ───────
+    const loanType = detectLoanType(text);
+    console.log(`💡 Loan type detected: ${loanType}`);
 
-    // Get first name from message if possible (for digital_journey variable)
-    // Default to empty — Apps Script will use name from form if available
-    const firstName = "";
-
-    console.log(`💡 Loan: ${loanType} → Template: ${templateName}`);
-
-    // ── STEP 4: Send template ─────────────────────────────
-    await sendTemplate(from, templateName, firstName);
+    // ── STEP 4: Send welcome template (same for all) ──────
+    console.log(`📤 Sending template: ${WELCOME_TEMPLATE} → ${from}`);
+    await sendTemplate(from, WELCOME_TEMPLATE);
 
   } catch (err) {
     console.error("❌ Webhook error:", err.message);
@@ -256,8 +218,8 @@ app.post("/webhook", async (req, res) => {
 // ============================================================
 app.get("/", (req, res) => {
   res.json({
-    status : "✅ VastMyWealth Relay v3 Running",
-    version: "v3",
+    status : "✅ VastMyWealth Relay v4 Running",
+    version: "v4",
     time   : new Date().toISOString()
   });
 });
@@ -267,6 +229,6 @@ app.get("/", (req, res) => {
 // ============================================================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`🚀 VastMyWealth Relay v3 running on port ${PORT}`);
+  console.log(`🚀 VastMyWealth Relay v4 running on port ${PORT}`);
 });
 
