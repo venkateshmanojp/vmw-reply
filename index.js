@@ -38,9 +38,10 @@ function detectLoanType(text) {
   if (t.includes("PROPERTY") || t === "LAP" || t.includes("#LAP") ||
       t.includes("AGAINST")  || t.includes("MORTG"))               return "Loan Against Property";
   if (t.includes("PERSONAL") || t === "PL"  || t.includes("#PL"))  return "Personal Loan";
+  if (t.includes("PARTNER")  || t.includes("EARN") || 
+      t.includes("JOIN")     || t.includes("AGENT")) return "Partner Inquiry";
   return "Personal Loan";
 }
-
 // ============================================================
 // CHECK IF TEMPLATE ALREADY SENT
 // ============================================================
