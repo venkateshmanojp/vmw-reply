@@ -206,8 +206,22 @@ if (alreadySent) {
     console.log(`💡 Loan type detected: ${loanType}`);
 
     // ── STEP 4: Send welcome template (same for all) ──────
-    console.log(`📤 Sending template: ${WELCOME_TEMPLATE} → ${from}`);
-    await sendTemplate(from, WELCOME_TEMPLATE);
+    if (loanType === "Home Loan") {
+  console.log(`📤 Sending welcome_hl → ${from}`);
+  await sendTemplate(from, "welcome_hl");
+} else if (loanType === "Loan Against Property") {
+  console.log(`📤 Sending welcome_lap → ${from}`);
+  await sendTemplate(from, "welcome_lap");
+} else if (loanType === "Personal Loan" || loanType === "Business Loan") {
+  console.log(`📤 Sending welcome_unsecured → ${from}`);
+  await sendTemplate(from, "welcome_unsecured");
+} else if (loanType === "Partner Inquiry" || loanType === "Construction Finance") {
+  console.log(`⏭️ No auto template for: ${loanType}`);
+} else {
+  console.log(`📤 Sending welcome template → ${from}`);
+  await sendTemplate(from, WELCOME_TEMPLATE);
+}
+
 
   } catch (err) {
     console.error("❌ Webhook error:", err.message);
