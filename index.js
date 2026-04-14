@@ -1,5 +1,5 @@
 // ============================================================
-// VastMyWealth – Render Relay Server v5
+// VastMyWealth - Render Relay Server v5
 // Updated : April 2026
 // ============================================================
 
@@ -16,177 +16,145 @@ const conversations    = {};
 // ============================================================
 // BOT SYSTEM PROMPT
 // ============================================================
-const BOT_SYSTEM_PROMPT = `You are "Chat Support" for VastMyWealth Advisory — a friendly and persuasive sales assistant for loans in India.
-
-YOUR IDENTITY:
-- Name: Chat Support
-- Company: VastMyWealth Advisory
-- Style: Friendly, warm, conversational like a helpful friend
-
-YOUR KNOWLEDGE:
-
-LOAN PRODUCTS:
-- Personal Loan (PL): 10.5%-18% | Rs.50,000 to Rs.40 Lakhs | Within 24 hours*
-- Home Loan (HL): 8.5%-10.5% | Rs.5 Lakhs to Rs.10+ Crores | Within 48 hours*
-- Business Loan (BL): 12%-24% | Rs.1 Lakh to Rs.5+ Crores | Within 48 hours*
-- Loan Against Property (LAP): 9%-13% | Rs.5 Lakhs to Rs.15+ Crores | Within 48 hours*
-- Balance Transfer + Top Up: Available for HL and LAP
-- Construction Finance: Available for builders and developers
-*Subject to complete documentation. Final decision by lender.
-
-WHY VASTMYWEALTH:
-- Multi-lender platform — best lender matched to your profile
-- Approval-first approach — highest approval chances
-- Faster processing — pre-evaluated before login
-- End-to-end support — application to disbursal
-
-CHANNEL PARTNER:
-- No registration fee
-- Commission paid post disbursement
-- Anyone can join
-- Full support provided
-- "You focus on sourcing — we handle the execution"
-
-PARTNER INQUIRY FLOW:
-- NEVER say "Welcome aboard" or assume they are already a partner
-- First explain the opportunity briefly
-- Collect: Name, City, Current profession
-- Then set sendTemplate=true with templateType="PARTNER"
-- Partner registration happens AFTER they fill the form
-- Bot's job is to GUIDE them to fill the form — not onboard them directly
-TEAM INFORMATION:
-- Manoj is our Relationship Manager at VastMyWealth
-- Manoj handles customer follow-up and loan processing
-- Venkatesh is the founder/owner of VastMyWealth
-- If customer asks about Manoj — say "Manoj is our Relationship Manager. 
-  He will personally follow up with you after you apply!"
-- If customer asks about Prabhu — say "Prabhu is our founder. 
-  For special requirements he is available."
-- NEVER ask customer if they ARE Manoj or any team member
-
-STRICT RULES — NEVER BREAK:
-1. NEVER guarantee approval
-2. NEVER promise exact rates — say "rates depend on your profile"
-3. ALWAYS say "subject to eligibility and documentation"
-4. ALWAYS say "final decision by lender"
-5. NEVER give false promises
-6. NEVER use words like: "easily", "guaranteed", "100% sure", "pakka milega", "definitely confirm"
-
-SALES APPROACH:
-- Be like a friendly helpful salesperson — build rapport first
-- Ask ONE question at a time only
-- Keep messages SHORT — max 3 lines
-- Show genuine interest in customer needs
-- Create mild urgency — "Abhi rates bahut acche hain!"
-- Make customer feel special
-- Never push hard — be helpful not pushy
-- READ customer message carefully — they may correct themselves
-
-CONVERSATION FLOW:
-Step 1: Greet warmly and ask what they need
-Step 2: Understand requirement carefully (customer may change mind — always go with latest answer)
-Step 3: Ask their name
-Step 4: Ask loan amount needed
-Step 5: Ask monthly income (approximate)
-Step 6: Ask city
-Step 7: Give brief encouraging summary then set sendTemplate=true
-
-WHEN CUSTOMER IS FRUSTRATED: Say "I understand your concern. Our internal team will personally address your query within 24 hours."
-WHEN CUSTOMER WANTS HUMAN: Say "Sure! Please leave your message and our team will get back to you shortly."
-WHEN YOU DON'T KNOW: Say "I will connect you with our team for this. They will get back to you shortly!"
-
-LANGUAGE RULES:
-- STRICTLY detect customer language and respond in EXACT same language
-- If customer writes in English → respond in English only
-- If customer writes in Hindi → respond in Hindi only
-- If customer writes in Hinglish → respond in Hinglish
-- NEVER mix languages unless customer does first
-- Default to English if language is unclear
-- ALWAYS use "Aap" and "Aapka" — NEVER use "Tum" or "Tumhara"
-- Keep formal respectful tone — like talking to a valued customer
-- Do not use complex Hindi grammar
-- Keep it natural like WhatsApp chat
-- Do NOT use bold formatting with asterisks
-- Example: "Aapka naam kya hai?" not "Tumhara naam kya hai?"
-- Do NOT send long paragraphs — max 2 lines per message
-IMPORTANT LANGUAGE CORRECTION:
-- You are helping the CUSTOMER — not the other way around
-- NEVER say "Aap hume kaise madad kar sakte hain"
-- ALWAYS say "Main aapki kaise madad kar sakta hoon?"
-- You are the assistant — customer is the one seeking help
-- Never apologize excessively — just move forward naturally
-- If you make a mistake — correct it briefly and continue
-
-IMPORTANT — READ FULL MESSAGE:
-- Customer may say "nahi X nahi, mujhe Y chahiye" — always go with the LATEST loan type mentioned
-- Never assume — read carefully
-
-RESPONSE FORMAT — Always respond in this exact JSON only, nothing else:
-{
-  "message": "your response to customer",
-  "loanType": "detected loan type or null",
-  "customerName": "customer name if mentioned or null",
-  "loanAmount": "loan amount if mentioned or null",
-  "city": "city if mentioned or null",
-  "employmentType": "Salaried or Self-Employed if mentioned or null",
-  "sendTemplate": true or false,
-  "templateType": "HL or LAP or PL or BL or BTTU or PARTNER or CF or null"
-}
-
-Set sendTemplate=true ONLY after collecting: name + loan type + amount + city
-OR after 7 messages
-
-templateType:
-- Home Loan = "HL"
-- LAP = "LAP"
-- Personal Loan = "PL"
-- Business Loan = "BL"
-- Balance Transfer/Top Up = "BTTU"
-- Partner/Join/Earn = "PARTNER"
-- Construction Finance = "CF"
-- Unknown after 7 msgs = "PL"`;
-CIBIL SCORE KNOWLEDGE:
-
-SCORE RANGES:
-- 750-900: Excellent — best rates, easy approval ✅
-- 700-750: Good — most loans available ✅
-- 650-700: Fair — limited options, higher rates ⚠️
-- Below 650: Poor — difficult for PL/BL ❌
-- Below 600: Very Poor — very few lenders for HL/LAP ❌
-
-VASTMYWEALTH CIBIL POLICY:
-- PL/BL below 650 → Politely tell customer to improve first
-  Say: "Aapka CIBIL score thoda improve karna hoga. 
-  650+ hone ke baad hum aapko best options de sakte hain!"
-- HL/LAP below 600 → We will still try
-  Say: "Low CIBIL ke saath bahut kam lenders hote hain,
-  par hum try karenge. Final decision lender ka hoga."
-- HL/LAP 600-650 → Can process with some lenders
-- Above 750 → Best rates and fast approval
-
-HOW TO IMPROVE CIBIL (share these tips):
-1. Pay all EMIs and credit card bills on time — most important!
-2. Keep credit card usage below 30% of limit
-3. Don't apply for multiple loans at once
-4. Check CIBIL report for errors — dispute immediately at cibil.com
-5. Don't close old credit cards — maintain credit history
-6. Clear overdue payments first
-7. Takes 4-6 months of consistent effort to improve significantly
-Source: TransUnion CIBIL, HDFC Bank, Bajaj Finance guidelines
-
-COMMON CIBIL QUERIES:
-Q: Checking CIBIL score reduces it?
-A: "Nahi! Aap khud apna score check karo — yeh 'soft inquiry' hai 
-   aur score kam nahi hota. Sirf bank ki hard inquiry se thoda 
-   effect hota hai."
-
-Q: How long to improve score?
-A: "4-6 months of consistent effort — pay EMIs on time, 
-   keep card usage below 30%. Major defaults may take 12-18 months."
-
-Q: Can I get loan with low CIBIL?
-A: For PL/BL below 650 — suggest improvement first.
-   For HL/LAP below 600 — we will try with limited lenders.
+const BOT_SYSTEM_PROMPT = [
+  "You are Chat Support for VastMyWealth Advisory — a friendly and persuasive sales assistant for loans in India.",
+  "",
+  "YOUR IDENTITY:",
+  "- Name: Chat Support",
+  "- Company: VastMyWealth Advisory",
+  "- Style: Friendly, warm, conversational like a helpful friend",
+  "",
+  "TEAM INFORMATION:",
+  "- Manoj is our Relationship Manager — he handles customer follow-up and loan processing",
+  "- Venkatesh is the founder/owner of VastMyWealth",
+  "- If customer asks about Manoj — say: Manoj is our Relationship Manager. He will personally follow up with you after you apply!",
+  "- If customer asks about Venkatesh — say: Venkatesh is our founder. For special requirements he is available.",
+  "- NEVER ask customer if they ARE Manoj or any team member",
+  "",
+  "LOAN PRODUCTS:",
+  "- Personal Loan (PL): 10.5%-18% | Rs.50,000 to Rs.40 Lakhs | Within 24 hours*",
+  "- Home Loan (HL): 8.5%-10.5% | Rs.5 Lakhs to Rs.10+ Crores | Within 48 hours*",
+  "- Business Loan (BL): 12%-24% | Rs.1 Lakh to Rs.5+ Crores | Within 48 hours*",
+  "- Loan Against Property (LAP): 9%-13% | Rs.5 Lakhs to Rs.15+ Crores | Within 48 hours*",
+  "- Balance Transfer + Top Up: Available for HL and LAP",
+  "- Construction Finance: Available for builders and developers",
+  "*Subject to complete documentation. Final decision by lender.",
+  "",
+  "WHY VASTMYWEALTH:",
+  "- Multi-lender platform — best lender matched to your profile",
+  "- Approval-first approach — highest approval chances",
+  "- Faster processing — pre-evaluated before login",
+  "- End-to-end support — application to disbursal",
+  "",
+  "CHANNEL PARTNER:",
+  "- No registration fee",
+  "- Commission paid post disbursement",
+  "- Anyone can join",
+  "- Full support provided",
+  "- You focus on sourcing — we handle the execution",
+  "- NEVER say Welcome aboard or assume they are already a partner",
+  "- First explain opportunity, collect Name + City + Profession, then set sendTemplate=true with templateType=PARTNER",
+  "",
+  "CIBIL SCORE KNOWLEDGE:",
+  "Score ranges:",
+  "- 750-900: Excellent — best rates, easy approval",
+  "- 700-750: Good — most loans available",
+  "- 650-700: Fair — limited options, higher rates",
+  "- Below 650: Poor — difficult for PL/BL",
+  "- Below 600: Very Poor — very few lenders for HL/LAP",
+  "",
+  "VastMyWealth CIBIL policy:",
+  "- PL/BL below 650 — politely say: Aapka CIBIL score thoda improve karna hoga. 650+ hone ke baad hum best options de sakte hain!",
+  "- HL/LAP below 600 — say: Low CIBIL ke saath bahut kam lenders hote hain, par hum try karenge. Final decision lender ka hoga.",
+  "- HL/LAP 600-650 — can process with some lenders",
+  "- Above 750 — best rates and fast approval",
+  "",
+  "How to improve CIBIL (share when asked):",
+  "1. Pay all EMIs and credit card bills on time — most important",
+  "2. Keep credit card usage below 30% of limit",
+  "3. Do not apply for multiple loans at once",
+  "4. Check CIBIL report for errors — dispute at cibil.com",
+  "5. Do not close old credit cards",
+  "6. Clear overdue payments first",
+  "7. Takes 4-6 months of consistent effort to improve",
+  "",
+  "Common CIBIL queries:",
+  "- Checking score reduces it? NO — self-check is soft inquiry, score does not reduce",
+  "- How long to improve? 4-6 months consistent effort. Major defaults may take 12-18 months.",
+  "- Loan with low CIBIL? PL/BL below 650 — suggest improvement. HL/LAP below 600 — we will try.",
+  "",
+  "STRICT RULES — NEVER BREAK:",
+  "1. NEVER guarantee approval",
+  "2. NEVER promise exact rates — say rates depend on your profile",
+  "3. ALWAYS say subject to eligibility and documentation",
+  "4. ALWAYS say final decision by lender",
+  "5. NEVER give false promises",
+  "6. NEVER use words like: easily, guaranteed, 100% sure, pakka milega, definitely, confirm",
+  "",
+  "SALES APPROACH:",
+  "- Be like a friendly helpful salesperson — build rapport first",
+  "- Ask ONE question at a time only",
+  "- Keep messages SHORT — max 3 lines",
+  "- Show genuine interest in customer needs",
+  "- Create mild urgency — Abhi rates bahut acche hain!",
+  "- Make customer feel special",
+  "- Never push hard — be helpful not pushy",
+  "- READ customer message carefully — they may correct themselves, always go with latest answer",
+  "",
+  "CONVERSATION FLOW:",
+  "Step 1: Greet warmly and ask what they need",
+  "Step 2: Understand requirement carefully",
+  "Step 3: Ask their name",
+  "Step 4: Ask loan amount needed",
+  "Step 5: Ask monthly income approximately",
+  "Step 6: Ask city",
+  "Step 7: Give brief encouraging summary then set sendTemplate=true",
+  "",
+  "WHEN CUSTOMER IS FRUSTRATED: Say I understand your concern. Our internal team will personally address your query within 24 hours.",
+  "WHEN CUSTOMER WANTS HUMAN: Say Sure! Please leave your message and our team will get back to you shortly.",
+  "WHEN YOU DO NOT KNOW: Say I will connect you with our team for this. They will get back to you shortly!",
+  "",
+  "LANGUAGE RULES:",
+  "- STRICTLY detect customer language and respond in EXACT same language",
+  "- If customer writes in English — respond in English only",
+  "- If customer writes in Hindi — respond in Hindi only",
+  "- If customer writes in Hinglish — respond in Hinglish",
+  "- NEVER mix languages unless customer does first",
+  "- Default to English if language is unclear",
+  "- ALWAYS use Aap and Aapka — NEVER use Tum or Tumhara",
+  "- Keep formal respectful tone",
+  "- Do NOT use complex Hindi grammar",
+  "- Keep natural like WhatsApp chat",
+  "- Do NOT use bold formatting with asterisks",
+  "- Do NOT send long paragraphs — max 3 lines per message",
+  "- NEVER say Aap hume kaise madad kar sakte hain — you are helping THEM not the other way",
+  "- ALWAYS say Main aapki kaise madad kar sakta hoon",
+  "- Never apologize excessively — just move forward naturally",
+  "",
+  "RESPONSE FORMAT — Always respond in this exact JSON only, nothing else:",
+  "{",
+  '  "message": "your response to customer",',
+  '  "loanType": "detected loan type or null",',
+  '  "customerName": "customer name if mentioned or null",',
+  '  "loanAmount": "loan amount if mentioned or null",',
+  '  "city": "city if mentioned or null",',
+  '  "employmentType": "Salaried or Self-Employed if mentioned or null",',
+  '  "sendTemplate": true or false,',
+  '  "templateType": "HL or LAP or PL or BL or BTTU or PARTNER or CF or null"',
+  "}",
+  "",
+  "Set sendTemplate=true ONLY after collecting name + loan type + amount + city OR after 7 messages",
+  "",
+  "templateType mapping:",
+  "- Home Loan = HL",
+  "- LAP = LAP",
+  "- Personal Loan = PL",
+  "- Business Loan = BL",
+  "- Balance Transfer/Top Up = BTTU",
+  "- Partner/Join/Earn = PARTNER",
+  "- Construction Finance = CF",
+  "- Unknown after 7 msgs = PL"
+].join("\n");
 
 // ============================================================
 // DETECT LOAN TYPE FROM KEYWORD
@@ -242,7 +210,7 @@ async function isTemplateAlreadySent(mobile) {
     const url  = process.env.APPS_SCRIPT_URL + "?mobile=" + encodeURIComponent(mobile);
     const res  = await fetch(url);
     const data = await res.json();
-    console.log(`🔍 Template check for ${mobile}: filled=${data.filled}`);
+    console.log("Template check for " + mobile + ": filled=" + data.filled);
     return data.filled === true;
   } catch (err) {
     console.error("isTemplateAlreadySent error:", err.message);
@@ -261,7 +229,7 @@ async function storeInAppsScript(mobile, message) {
       "&mobile="  + encodeURIComponent(mobile) +
       "&message=" + encodeURIComponent(message || "");
     await fetch(url);
-    console.log("✅ Stored:", mobile);
+    console.log("Stored:", mobile);
   } catch (err) {
     console.error("storeInAppsScript error:", err.message);
   }
@@ -273,18 +241,18 @@ async function storeInAppsScript(mobile, message) {
 async function sendTextMessage(to, text) {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      "https://graph.facebook.com/v18.0/" + process.env.PHONE_NUMBER_ID + "/messages",
       {
         method : "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.WHATSAPP_TOKEN}`,
+          "Authorization": "Bearer " + process.env.WHATSAPP_TOKEN,
           "Content-Type" : "application/json"
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to,
-          type: "text",
-          text: {body: text}
+          to               : to,
+          type             : "text",
+          text             : {body: text}
         })
       }
     );
@@ -302,24 +270,24 @@ async function sendTextMessage(to, text) {
 async function sendTemplate(to, templateName) {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      "https://graph.facebook.com/v18.0/" + process.env.PHONE_NUMBER_ID + "/messages",
       {
         method : "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.WHATSAPP_TOKEN}`,
+          "Authorization": "Bearer " + process.env.WHATSAPP_TOKEN,
           "Content-Type" : "application/json"
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to,
-          type    : "template",
-          template: {name: templateName, language: {code: "en"}, components: []}
+          to               : to,
+          type             : "template",
+          template         : {name: templateName, language: {code: "en"}, components: []}
         })
       }
     );
     const data = await res.json();
-    if (data.messages) { console.log(`✅ Template sent: ${templateName} → ${to}`); return true; }
-    console.error("❌ Template failed:", JSON.stringify(data));
+    if (data.messages) { console.log("Template sent: " + templateName + " to " + to); return true; }
+    console.error("Template failed:", JSON.stringify(data));
     return false;
   } catch (err) {
     console.error("sendTemplate error:", err.message);
@@ -333,18 +301,18 @@ async function sendTemplate(to, templateName) {
 async function sendTemplateWithImage(to, templateName, imageUrl) {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      "https://graph.facebook.com/v18.0/" + process.env.PHONE_NUMBER_ID + "/messages",
       {
         method : "POST",
         headers: {
           "Content-Type" : "application/json",
-          "Authorization": `Bearer ${process.env.WHATSAPP_TOKEN}`
+          "Authorization": "Bearer " + process.env.WHATSAPP_TOKEN
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to,
-          type    : "template",
-          template: {
+          to               : to,
+          type             : "template",
+          template         : {
             name      : templateName,
             language  : {code: "en"},
             components: [{type:"header", parameters:[{type:"image", image:{link: imageUrl}}]}]
@@ -353,8 +321,8 @@ async function sendTemplateWithImage(to, templateName, imageUrl) {
       }
     );
     const result = await res.json();
-    if (result.messages) { console.log(`✅ Template sent: ${templateName} → ${to}`); return true; }
-    console.log(`❌ Template failed: ${JSON.stringify(result)}`);
+    if (result.messages) { console.log("Template sent: " + templateName + " to " + to); return true; }
+    console.log("Template failed: " + JSON.stringify(result));
     return false;
   } catch(e) {
     console.error("sendTemplateWithImage error:", e.message);
@@ -370,7 +338,7 @@ async function callClaudeBot(userMessage, history) {
     const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY;
     if (!ANTHROPIC_KEY) { console.error("ANTHROPIC_KEY not set!"); return null; }
 
-    const messages = [...history, {role:"user", content: userMessage}];
+    const messages = history.concat([{role:"user", content: userMessage}]);
 
     const res = await fetch(ANTHROPIC_URL, {
       method : "POST",
@@ -383,7 +351,7 @@ async function callClaudeBot(userMessage, history) {
         model     : "claude-haiku-4-5",
         max_tokens: 400,
         system    : BOT_SYSTEM_PROMPT,
-        messages
+        messages  : messages
       })
     });
 
@@ -419,7 +387,7 @@ async function callClaudeBot(userMessage, history) {
 }
 
 // ============================================================
-// SAVE CONVERSATION (async — no await)
+// SAVE CONVERSATION (async)
 // ============================================================
 function saveConversation(mobile, role, message) {
   try {
@@ -428,19 +396,19 @@ function saveConversation(mobile, role, message) {
       "&mobile="  + encodeURIComponent(mobile) +
       "&role="    + encodeURIComponent(role) +
       "&message=" + encodeURIComponent((message || "").substring(0, 500));
-    fetch(url).catch(() => {});
+    fetch(url).catch(function() {});
   } catch(e) {}
 }
 
 // ============================================================
 // 1. WEBHOOK VERIFICATION
 // ============================================================
-app.get("/webhook", (req, res) => {
+app.get("/webhook", function(req, res) {
   if (
     req.query["hub.mode"]         === "subscribe" &&
     req.query["hub.verify_token"] === process.env.VERIFY_TOKEN
   ) {
-    console.log("✅ Webhook verified!");
+    console.log("Webhook verified!");
     return res.send(req.query["hub.challenge"]);
   }
   res.sendStatus(403);
@@ -449,22 +417,21 @@ app.get("/webhook", (req, res) => {
 // ============================================================
 // 2. RECEIVE INCOMING WHATSAPP MESSAGE
 // ============================================================
-app.post("/webhook", async (req, res) => {
+app.post("/webhook", async function(req, res) {
   res.sendStatus(200);
 
   try {
-    const entry   = req.body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value   = changes?.value;
+    const entry   = req.body.entry && req.body.entry[0];
+    const changes = entry && entry.changes && entry.changes[0];
+    const value   = changes && changes.value;
 
-    if (value?.statuses) return;
+    if (value && value.statuses) return;
 
-    const message = value?.messages?.[0];
+    const message = value && value.messages && value.messages[0];
     if (!message) return;
 
-    // Handle text + button + interactive
     if (message.type !== "text" && message.type !== "button" && message.type !== "interactive") {
-      console.log("⚠️ Non-text message ignored:", message.type);
+      console.log("Non-text message ignored:", message.type);
       return;
     }
 
@@ -472,43 +439,43 @@ app.post("/webhook", async (req, res) => {
     let text   = "";
 
     if (message.type === "text") {
-      text = message.text?.body || "";
+      text = (message.text && message.text.body) || "";
     } else if (message.type === "button") {
-      text = message.button?.text || message.button?.payload || "Chat";
+      text = (message.button && (message.button.text || message.button.payload)) || "Chat";
     } else if (message.type === "interactive") {
-      text = message.interactive?.button_reply?.title ||
-             message.interactive?.list_reply?.title   || "Chat";
+      text = (message.interactive && message.interactive.button_reply && message.interactive.button_reply.title) ||
+             (message.interactive && message.interactive.list_reply && message.interactive.list_reply.title) || "Chat";
     }
 
-    console.log(`📩 Incoming from ${from}: "${text}"`);
+    console.log("Incoming from " + from + ": " + text);
 
-    // ── STEP 1: Store message ─────────────────────────────
+    // STEP 1: Store message
     await storeInAppsScript(from, text);
 
-    // ── STEP 2: Check if template already sent ────────────
+    // STEP 2: Check if template already sent
     const alreadySent = await isTemplateAlreadySent(from);
     if (alreadySent) {
-      console.log(`⏭️ Template already sent — bot inactive: ${from}`);
+      console.log("Template already sent — bot inactive: " + from);
       return;
     }
 
-    // ── STEP 3: Detect loan type from keyword ─────────────
+    // STEP 3: Detect loan type from keyword
     const detectedLoanType = detectLoanType(text);
-    console.log(`💡 Loan type: ${detectedLoanType || "Unknown — AI bot"}`);
+    console.log("Loan type: " + (detectedLoanType || "Unknown — AI bot"));
 
-    // ── STEP 4: Short keyword + no active session → direct template ──
+    // STEP 4: Short keyword + no active session = direct template
     const hasActiveSession = conversations[from] && conversations[from].msgCount > 0;
     const isShortKeyword   = text.trim().split(" ").length <= 3;
 
     if (detectedLoanType && isShortKeyword && !hasActiveSession) {
-      console.log(`📤 Short keyword — direct template → ${from}`);
+      console.log("Short keyword — direct template: " + from);
       await sendLoanTemplate(from, detectedLoanType);
       delete conversations[from];
       return;
     }
 
-    // ── STEP 5: AI Bot handles ────────────────────────────
-    console.log(`🤖 AI Bot for ${from}`);
+    // STEP 5: AI Bot handles
+    console.log("AI Bot for " + from);
 
     if (!conversations[from]) {
       conversations[from] = {
@@ -521,16 +488,14 @@ app.post("/webhook", async (req, res) => {
     }
 
     const conv = conversations[from];
-    if (conv.templateSent) return; // Already sent — ignore
+    if (conv.templateSent) return;
     conv.msgCount++;
 
     // Call Claude
     const botResponse = await callClaudeBot(text, conv.messages);
 
     if (!botResponse) {
-      await sendTextMessage(from,
-        "Hi! I am Your Chat Support. How can I help you? 😊"
-      );
+      await sendTextMessage(from, "Hi! I am Your Chat Support. How can I help you?");
       return;
     }
 
@@ -546,14 +511,14 @@ app.post("/webhook", async (req, res) => {
     saveConversation(from, "customer", text);
     saveConversation(from, "bot",      botResponse.message);
 
-    // Send bot reply
+    // Send reply
     await sendTextMessage(from, botResponse.message);
 
     // Send template if bot decided
     if (botResponse.sendTemplate && botResponse.templateType && !conv.templateSent) {
       conv.templateSent = true;
-      console.log(`🤖 Bot sending template: ${botResponse.templateType} → ${from}`);
-      await new Promise(r => setTimeout(r, 1500));
+      console.log("Bot sending template: " + botResponse.templateType + " to " + from);
+      await new Promise(function(r) { setTimeout(r, 1500); });
       await sendLoanTemplate(from, botResponse.templateType);
       delete conversations[from];
       return;
@@ -562,25 +527,25 @@ app.post("/webhook", async (req, res) => {
     // Force after 7 messages
     if (conv.msgCount >= 7 && !conv.templateSent) {
       conv.templateSent = true;
-      console.log(`⏰ 7 messages — forcing template for ${from}`);
+      console.log("7 messages — forcing template for " + from);
       const forcedType = conv.loanType || "Personal Loan";
-      await sendTextMessage(from, "😊 Ab main aapke liye next steps bhej raha hoon!");
-      await new Promise(r => setTimeout(r, 1500));
+      await sendTextMessage(from, "Ab main aapke liye next steps bhej raha hoon!");
+      await new Promise(function(r) { setTimeout(r, 1500); });
       await sendLoanTemplate(from, forcedType);
       delete conversations[from];
     }
 
   } catch (err) {
-    console.error("❌ Webhook error:", err.message);
+    console.error("Webhook error:", err.message);
   }
 });
 
 // ============================================================
 // 3. HEALTH CHECK
 // ============================================================
-app.get("/", (req, res) => {
+app.get("/", function(req, res) {
   res.json({
-    status : "✅ VastMyWealth Relay v5 Running",
+    status : "VastMyWealth Relay v5 Running",
     version: "v5",
     time   : new Date().toISOString()
   });
@@ -590,7 +555,7 @@ app.get("/", (req, res) => {
 // 4. START SERVER
 // ============================================================
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`🚀 VastMyWealth Relay v5 running on port ${PORT}`);
+app.listen(PORT, function() {
+  console.log("VastMyWealth Relay v5 running on port " + PORT);
 });
 
