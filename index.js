@@ -455,10 +455,16 @@ app.post("/webhook", async function(req, res) {
 
     // STEP 2: Check if template already sent
     const alreadySent = await isTemplateAlreadySent(from);
-    if (alreadySent) {
-      console.log("Template already sent — bot inactive: " + from);
-      return;
-    }
+
+// If template sent BUT customer clicked Chat button → reactivate bot
+const isChatButton = text === "Chat with us" || text === "💬 Chat with us" || 
+                     text.toLowerCase().includes("chat");
+
+if (alreadySent && !isChatButton) {
+  console.log("Template already sent — bot inactive: " + from);
+  return;
+}
+
 
     // STEP 3: Detect loan type from keyword
     const detectedLoanType = detectLoanType(text);
