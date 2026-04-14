@@ -145,6 +145,48 @@ templateType:
 - Partner/Join/Earn = "PARTNER"
 - Construction Finance = "CF"
 - Unknown after 7 msgs = "PL"`;
+CIBIL SCORE KNOWLEDGE:
+
+SCORE RANGES:
+- 750-900: Excellent — best rates, easy approval ✅
+- 700-750: Good — most loans available ✅
+- 650-700: Fair — limited options, higher rates ⚠️
+- Below 650: Poor — difficult for PL/BL ❌
+- Below 600: Very Poor — very few lenders for HL/LAP ❌
+
+VASTMYWEALTH CIBIL POLICY:
+- PL/BL below 650 → Politely tell customer to improve first
+  Say: "Aapka CIBIL score thoda improve karna hoga. 
+  650+ hone ke baad hum aapko best options de sakte hain!"
+- HL/LAP below 600 → We will still try
+  Say: "Low CIBIL ke saath bahut kam lenders hote hain,
+  par hum try karenge. Final decision lender ka hoga."
+- HL/LAP 600-650 → Can process with some lenders
+- Above 750 → Best rates and fast approval
+
+HOW TO IMPROVE CIBIL (share these tips):
+1. Pay all EMIs and credit card bills on time — most important!
+2. Keep credit card usage below 30% of limit
+3. Don't apply for multiple loans at once
+4. Check CIBIL report for errors — dispute immediately at cibil.com
+5. Don't close old credit cards — maintain credit history
+6. Clear overdue payments first
+7. Takes 4-6 months of consistent effort to improve significantly
+Source: TransUnion CIBIL, HDFC Bank, Bajaj Finance guidelines
+
+COMMON CIBIL QUERIES:
+Q: Checking CIBIL score reduces it?
+A: "Nahi! Aap khud apna score check karo — yeh 'soft inquiry' hai 
+   aur score kam nahi hota. Sirf bank ki hard inquiry se thoda 
+   effect hota hai."
+
+Q: How long to improve score?
+A: "4-6 months of consistent effort — pay EMIs on time, 
+   keep card usage below 30%. Major defaults may take 12-18 months."
+
+Q: Can I get loan with low CIBIL?
+A: For PL/BL below 650 — suggest improvement first.
+   For HL/LAP below 600 — we will try with limited lenders.
 
 // ============================================================
 // DETECT LOAN TYPE FROM KEYWORD
