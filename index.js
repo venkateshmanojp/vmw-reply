@@ -167,7 +167,7 @@ async function sendTemplateWithImage(to, templateName, imageUrl) {
         method : "POST",
         headers: {
           "Content-Type" : "application/json",
-          "Authorization": `Bearer ${META_TOKEN}`
+          "Authorization": `Bearer ${WHATSAPP_TOKEN}`
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
