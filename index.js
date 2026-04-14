@@ -471,15 +471,20 @@ app.post("/webhook", async (req, res) => {
 
     // ── STEP 3: Detect loan type from keyword ─────────────
     const detectedLoanType = detectLoanType(text);
-    console.log(`💡 Loan type detected: ${detectedLoanType || "Unknown — AI bot activating"}`);
+console.log(`💡 Loan type detected: ${detectedLoanType || "Unknown — AI bot activating"}`);
 
-    // ── STEP 4: Known keyword → send template directly ────
-    if (detectedLoanType) {
-      console.log(`📤 Keyword match — sending template directly → ${from}`);
-      await sendLoanTemplate(from, detectedLoanType);
-      delete conversations[from];
-      return;
-    }
+// ── STEP 4: Known keyword → send template directly ────
+// Only if NO active bot session AND short keyword
+const hasActiveSession = conversations[from] && conversations[from].msgCount > 0;
+const isShortKeyword   = text.trim().split(" ").length <= 3;
+
+if (detectedLoanType && isShortKeyword && !hasActiveSession) {
+  console.log(`📤 Short keyword — sending template directly → ${from}`);
+  await sendLoanTemplate(from, detectedLoanType);
+  delete conversations[from];
+  return;
+}
+
 
     // ── STEP 5: Unknown → AI Bot handles ──────────────────
     console.log(`🤖 AI Bot activating for ${from}`);
