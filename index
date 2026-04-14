@@ -73,6 +73,9 @@ STRICT RULES — NEVER BREAK:
 4. ALWAYS say "final decision by lender"
 5. NEVER give false promises or hopes
 6. If unsure — say "Our team will assist you with this"
+7. NEVER use words like: "easily", "guaranteed", "100% sure", 
+"pakka milega", "definitely", "confirm"
+
 
 LANGUAGE: Detect customer language and respond in same language. Use Hinglish if mixed.
 
@@ -137,6 +140,11 @@ templateType mapping:
 - Partner/Join/Earn → "PARTNER"
 - Construction Finance → "CF"
 - Unknown after 7 msgs → "PL"`;
+LANGUAGE RULES:
+- Use simple conversational Hinglish
+- Don't use complex Hindi grammar
+- Keep it natural like WhatsApp chat
+- Example: "Aapka naam kya hai?" not "Aap apna naam bata sakte hain?”
 
 // ============================================================
 // DETECT LOAN TYPE FROM KEYWORD
@@ -544,25 +552,28 @@ if (detectedLoanType && isShortKeyword && !hasActiveSession) {
     if (botResponse.customerName) conv.name     = botResponse.customerName;
     if (botResponse.loanType)     conv.loanType = botResponse.loanType;
 
-    // Save conversation
-    await saveConversation(from, "customer", text);
-    await saveConversation(from, "bot",      botResponse.message);
+    // Save conversation — async, don't wait
+saveConversation(from, "customer", text);
+saveConversation(from, "bot",      botResponse.message);
 
     // Send reply
     await sendTextMessage(from, botResponse.message);
 
     // Send template if bot decided
-    if (botResponse.sendTemplate && botResponse.templateType) {
-      console.log(`🤖 Bot sending template: ${botResponse.templateType} → ${from}`);
-      await new Promise(r => setTimeout(r, 1000));
-      await sendLoanTemplate(from, botResponse.templateType);
-      delete conversations[from];
-      return;
-    }
+    if (botResponse.sendTemplate && botResponse.templateType && !conv.templateSent) {
+  conv.templateSent = true;
+  console.log(`🤖 Bot sending template: ${botResponse.templateType} → ${from}`);
+  await new Promise(r => setTimeout(r, 1000));
+  await sendLoanTemplate(from, botResponse.templateType);
+  delete conversations[from];
+  return;
+}
+
 
     // Force after 7 messages
-    if (conv.msgCount >= 7) {
-      console.log(`⏰ 7 messages — forcing template for ${from}`);
+    if (conv.msgCount >= 7 && !conv.templateSent) {
+  console.log(`⏰ 7 messages — forcing template for ${from}`);
+
       const forcedType = conv.loanType || "Personal Loan";
       await sendTextMessage(from,
         "😊 Based on our conversation, here are your next steps to proceed!"
