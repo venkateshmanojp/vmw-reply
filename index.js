@@ -77,10 +77,19 @@ STRICT RULES — NEVER BREAK:
 LANGUAGE: Detect customer language and respond in same language. Use Hinglish if mixed.
 
 YOUR GOAL:
-1. Understand customer need (loan type, amount, purpose)
-2. Answer queries honestly
-3. Collect: Name, Loan Type, Amount, Employment Type, City
-4. After identifying loan type OR 7 messages → set sendTemplate=true
+1. Ask ONE question at a time — never list multiple questions together
+2. Start with just a simple greeting and ask what they need
+3. Based on their answer, ask the NEXT single question
+4. Keep responses SHORT — maximum 3-4 lines
+5. Collect naturally through conversation: Name, Loan Type, Amount, Employment Type, City
+6. After identifying loan type → set sendTemplate=true
+
+CONVERSATION STYLE:
+- One question per message
+- Short and friendly responses
+- Wait for customer to answer before asking next question
+- Do NOT list all options at once
+- Do NOT send long paragraphs
 
 WHEN FRUSTRATED: "I understand your concern. Our internal team will personally address your query within 24 hours."
 WHEN WANTS HUMAN: "Sure! Please leave your message and our team will get back to you shortly."
@@ -328,19 +337,34 @@ async function callClaudeBot(mobile, userMessage, history, isReturning, prevCont
     if (data.content && data.content[0]) {
       const text = data.content[0].text;
       try {
-  const clean = text.replace(/```json|```/g, "").trim();
+  const clean  = text.replace(/```json|```/g, "").trim();
   const parsed = JSON.parse(clean);
-  // Clean bold markdown for WhatsApp
+  // Fix escape sequences and formatting
   parsed.message = parsed.message
+    .replace(/\\n/g, "\n")
     .replace(/\*\*/g, "*")
     .replace(/#{1,6}\s/g, "");
   return parsed;
 } catch(e) {
-  // Extract message before JSON if present
-  const msgMatch = text.match(/"message"\s*:\s*"([^"]+)"/);
-  const cleanMsg = msgMatch ? msgMatch[1] : text.split('{')[0].trim();
-  return {message: cleanMsg, loanType: null, sendTemplate: false, templateType: null};
+  // Try to extract just message field
+  const msgMatch = text.match(/"message"\s*:\s*"([\s\S]*?)(?<!\\)"/);
+  if (msgMatch) {
+    return {
+      message     : msgMatch[1].replace(/\\n/g, "\n").replace(/\*\*/g, "*"),
+      loanType    : null,
+      sendTemplate: false,
+      templateType: null
+    };
+  }
+  // Return plain text
+  return {
+    message     : text.split("{")[0].trim(),
+    loanType    : null,
+    sendTemplate: false,
+    templateType: null
+  };
 }
+
     }
     return null;
   } catch(e) {
