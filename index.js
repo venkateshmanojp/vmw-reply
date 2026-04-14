@@ -328,11 +328,19 @@ async function callClaudeBot(mobile, userMessage, history, isReturning, prevCont
     if (data.content && data.content[0]) {
       const text = data.content[0].text;
       try {
-        const clean = text.replace(/```json|```/g, "").trim();
-        return JSON.parse(clean);
-      } catch(e) {
-        return {message: text, loanType: null, sendTemplate: false, templateType: null};
-      }
+  const clean = text.replace(/```json|```/g, "").trim();
+  const parsed = JSON.parse(clean);
+  // Clean bold markdown for WhatsApp
+  parsed.message = parsed.message
+    .replace(/\*\*/g, "*")
+    .replace(/#{1,6}\s/g, "");
+  return parsed;
+} catch(e) {
+  // Extract message before JSON if present
+  const msgMatch = text.match(/"message"\s*:\s*"([^"]+)"/);
+  const cleanMsg = msgMatch ? msgMatch[1] : text.split('{')[0].trim();
+  return {message: cleanMsg, loanType: null, sendTemplate: false, templateType: null};
+}
     }
     return null;
   } catch(e) {
