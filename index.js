@@ -34,7 +34,7 @@ const BOT_SYSTEM_PROMPT = [
   "LOAN PRODUCTS:",
   "- Personal Loan (PL): 10.5%-18% | Rs.50,000 to Rs.40 Lakhs | Principal sanction within 24 hours*",
 "- Home Loan (HL): 8.5%-10.5% | Rs.5 Lakhs to Rs.10+ Crores | Principal sanction within 48 hours*",
-"- Business Loan (BL): 12%-24% | Rs.1 Lakh to Rs.5+ Crores | Principal sanction within 48 hours*",
+"- Business Loan (BL): 12%-24% | Rs.1 Lakh to Rs.15+ Crores | Principal sanction within 48 hours*",
 "- Loan Against Property (LAP): 9%-13% | Rs.5 Lakhs to Rs.15+ Crores | Principal sanction within 48 hours*",
   "- Balance Transfer + Top Up: Available for HL and LAP",
   "- Construction Finance: Available for builders and developers — timeline varies based on project evaluation",
