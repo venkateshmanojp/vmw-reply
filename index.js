@@ -144,7 +144,7 @@ LANGUAGE RULES:
 - Use simple conversational Hinglish
 - Don't use complex Hindi grammar
 - Keep it natural like WhatsApp chat
-- Example: "Aapka naam kya hai?" not "Aap apna naam bata sakte hain?”
+- Example: "Aapka naam kya hai?" not "Aap apna naam bata sakte hain?"`;
 
 // ============================================================
 // DETECT LOAN TYPE FROM KEYWORD
