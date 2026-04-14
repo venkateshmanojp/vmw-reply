@@ -520,7 +520,6 @@ app.post("/webhook", async function(req, res) {
       console.log("Bot sending template: " + botResponse.templateType + " to " + from);
       await new Promise(function(r) { setTimeout(r, 1500); });
       await sendLoanTemplate(from, botResponse.templateType);
-      delete conversations[from];
       return;
     }
 
@@ -532,8 +531,7 @@ app.post("/webhook", async function(req, res) {
       await sendTextMessage(from, "Ab main aapke liye next steps bhej raha hoon!");
       await new Promise(function(r) { setTimeout(r, 1500); });
       await sendLoanTemplate(from, forcedType);
-      delete conversations[from];
-    }
+      }
 
   } catch (err) {
     console.error("Webhook error:", err.message);
