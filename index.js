@@ -156,10 +156,55 @@ app.get("/webhook", (req, res) => {
   console.error("❌ Webhook verification failed!");
   res.sendStatus(403);
 });
+// ============================================================
+// SEND TEMPLATE WITH IMAGE HEADER
+// ============================================================
+async function sendTemplateWithImage(to, templateName, imageUrl) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${PHONE_NUM_ID}/messages`,
+      {
+        method : "POST",
+        headers: {
+          "Content-Type" : "application/json",
+          "Authorization": `Bearer ${META_TOKEN}`
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to               : to,
+          type             : "template",
+          template         : {
+            name      : templateName,
+            language  : {code: "en"},
+            components: [
+              {
+                type      : "header",
+                parameters: [{type:"image", image:{link: imageUrl}}]
+              }
+            ]
+          }
+        })
+      }
+    );
+    const result = await response.json();
+    if (result.messages) {
+      console.log(`✅ Template sent: ${templateName} → ${to}`);
+      return true;
+    }
+    console.log(`❌ Template failed: ${JSON.stringify(result)}`);
+    return false;
+  } catch(e) {
+    console.error("sendTemplateWithImage error:", e.message);
+    return false;
+  }
+}
+
+
 
 // ============================================================
 // 2. RECEIVE INCOMING WHATSAPP MESSAGE
 // ============================================================
+
 app.post("/webhook", async (req, res) => {
 
   // Always respond 200 IMMEDIATELY — Meta requires this!
@@ -205,20 +250,28 @@ if (alreadySent) {
     const loanType = detectLoanType(text);
     console.log(`💡 Loan type detected: ${loanType}`);
 
-    // ── STEP 4: Send welcome template (same for all) ──────
-    if (loanType === "Home Loan") {
+    
+// ── STEP 4: Send loan specific template ──────
+if (loanType === "Home Loan") {
   console.log(`📤 Sending welcome_hl → ${from}`);
-  await sendTemplate(from, "welcome_hl");
+  await sendTemplateWithImage(from, "welcome_hl", "https://drive.google.com/uc?export=download&id=151p69azxUf_tcJH9uwueGtigbyqMscFk");
 } else if (loanType === "Loan Against Property") {
   console.log(`📤 Sending welcome_lap → ${from}`);
-  await sendTemplate(from, "welcome_lap");
+  await sendTemplateWithImage(from, "welcome_lap", "https://drive.google.com/uc?export=download&id=1WUkhuqRbtAm5hHk3dnZ8JLzYHz4E2AHq");
 } else if (loanType === "Personal Loan" || loanType === "Business Loan") {
   console.log(`📤 Sending welcome_unsecured → ${from}`);
-  await sendTemplate(from, "welcome_unsecured");
-} else if (loanType === "Partner Inquiry" || loanType === "Construction Finance") {
-  console.log(`⏭️ No auto template for: ${loanType}`);
+  await sendTemplateWithImage(from, "welcome_unsecured", "https://drive.google.com/uc?export=download&id=1llb-yxEyzSR1JVEqdM4TmI7_ICDOFSrD");
+} else if (loanType === "Balance Transfer + Top Up") {
+  console.log(`📤 Sending welcome_lap → ${from}`);
+  await sendTemplateWithImage(from, "welcome_lap", "https://drive.google.com/uc?export=download&id=1WUkhuqRbtAm5hHk3dnZ8JLzYHz4E2AHq");
+} else if (loanType === "Partner Inquiry") {
+  console.log(`📤 Sending partner_recruitment → ${from}`);
+  await sendTemplateWithImage(from, "partner_recruitment", "https://drive.google.com/uc?export=download&id=18WCgSkS9sLmeI8YNgaLPKbBw-QJ90xPv");
+} else if (loanType === "Construction Finance") {
+  console.log(`📤 Sending construction_finance → ${from}`);
+  await sendTemplateWithImage(from, "construction_finance", "https://drive.google.com/uc?export=download&id=1la4AWXmwlpwqXWC9cZsvUnwxgyq92Bxz");
 } else {
-  console.log(`📤 Sending welcome template → ${from}`);
+  console.log(`📤 Sending welcome → ${from}`);
   await sendTemplate(from, WELCOME_TEMPLATE);
 }
 
