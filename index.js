@@ -40,6 +40,7 @@ function detectLoanType(text) {
   if (t.includes("PERSONAL") || t === "PL"  || t.includes("#PL"))  return "Personal Loan";
   if (t.includes("PARTNER")  || t.includes("EARN") || 
       t.includes("JOIN")     || t.includes("AGENT")) return "Partner Inquiry";
+  if (t.includes("CONSTRUCTION") || t.includes("BUILDER")) return "Construction Finance";
   return "Personal Loan";
 }
 // ============================================================
