@@ -1,6 +1,6 @@
 // ============================================================
 // VastMyWealth – Render Relay Server v4
-// Updated : March 2026
+// Updated : March 2026https://github.com/venkateshmanojp/vmw-reply/edit/main/index.js
 //
 // FLOW:
 // Customer messages WhatsApp → store message →
@@ -162,12 +162,14 @@ app.get("/webhook", (req, res) => {
 async function sendTemplateWithImage(to, templateName, imageUrl) {
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+
       {
         method : "POST",
         headers: {
           "Content-Type" : "application/json",
-          "Authorization": `Bearer ${WHATSAPP_TOKEN}`
+          "Authorization": `Bearer ${process.env.WHATSAPP_TOKEN}`
+
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
