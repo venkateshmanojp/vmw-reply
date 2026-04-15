@@ -438,6 +438,17 @@ app.post("/webhook", async function(req, res) {
 
     const from = message.from;
     let text   = "";
+// Deduplicate messages
+const msgId = message.id;
+if (!conversations._processedIds) conversations._processedIds = {};
+if (conversations._processedIds[msgId]) {
+  console.log("Duplicate message ignored: " + msgId);
+  return;
+}
+conversations._processedIds[msgId] = true;
+// Clean old IDs
+const ids = Object.keys(conversations._processedIds);
+if (ids.length > 100) delete conversations._processedIds[ids[0]];
 
     if (message.type === "text") {
       text = (message.text && message.text.body) || "";
