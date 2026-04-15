@@ -527,7 +527,9 @@ if (alreadySent && !isChatButton) {
     if (conv.messages.length > 12) conv.messages = conv.messages.slice(-12);
 
     if (botResponse.customerName) conv.name     = botResponse.customerName;
-    if (botResponse.loanType)     conv.loanType = botResponse.loanType;
+if (botResponse.loanType)     conv.loanType = botResponse.loanType;
+if (botResponse.city)         conv.city     = botResponse.city;
+
 
     // Save conversation async
     saveConversation(from, "customer", text);
@@ -538,12 +540,29 @@ if (alreadySent && !isChatButton) {
 
     // Send template if bot decided
     if (botResponse.sendTemplate && botResponse.templateType && !conv.templateSent) {
-      conv.templateSent = true;
-      console.log("Bot sending template: " + botResponse.templateType + " to " + from);
-      await new Promise(function(r) { setTimeout(r, 1500); });
-      await sendLoanTemplate(from, botResponse.templateType);
-      return;
-    }
+  conv.templateSent = true;
+  console.log("Bot sending template: " + botResponse.templateType + " to " + from);
+
+  // Save lead to WA Leads tab
+  try {
+    const saveUrl = process.env.APPS_SCRIPT_URL +
+      "?action=storeMessage" +
+      "&mobile="   + encodeURIComponent(from) +
+      "&message="  + encodeURIComponent("Bot qualified lead") +
+      "&name="     + encodeURIComponent(conv.name     || "") +
+      "&loanType=" + encodeURIComponent(conv.loanType || botResponse.templateType || "") +
+      "&city="     + encodeURIComponent(conv.city     || botResponse.city || "");
+    await fetch(saveUrl);
+    console.log("Lead saved to WA Leads: " + from);
+  } catch(e) {
+    console.error("Save lead error:", e.message);
+  }
+
+  await new Promise(function(r) { setTimeout(r, 1500); });
+  await sendLoanTemplate(from, botResponse.templateType);
+  return;
+}
+
 
     // Force after 7 messages
     if (conv.msgCount >= 7 && !conv.templateSent) {
