@@ -33,32 +33,31 @@ const BOT_SYSTEM_PROMPT = [
   "",
   "LOAN PRODUCTS:",
   "- Personal Loan (PL): 10.5%-18% | Rs.50,000 to Rs.40 Lakhs | Principal sanction within 24 hours*",
-"- Home Loan (HL): 8.5%-10.5% | Rs.5 Lakhs to Rs.10+ Crores | Principal sanction within 48 hours*",
-"- Business Loan (BL): 12%-24% | Rs.1 Lakh to Rs.15+ Crores | Principal sanction within 48 hours*",
-"- Loan Against Property (LAP): 9%-13% | Rs.5 Lakhs to Rs.15+ Crores | Principal sanction within 48 hours*",
+  "- Home Loan (HL): 8.5%-10.5% | Rs.5 Lakhs to Rs.10+ Crores | Principal sanction within 48 hours*",
+  "- Business Loan (BL): 12%-24% | Rs.1 Lakh to Rs.5+ Crores | Principal sanction within 48 hours*",
+  "- Loan Against Property (LAP): 9%-13% | Rs.5 Lakhs to Rs.15+ Crores | Principal sanction within 48 hours*",
   "- Balance Transfer + Top Up: Available for HL and LAP",
   "- Construction Finance: Available for builders and developers — timeline varies based on project evaluation",
-"*Subject to complete documentation. Principal sanction timeline only. Final disbursal may take additional time. Final decision by lender.",
-
-    "",
+  "*Subject to complete documentation. Principal sanction timeline only. Final disbursal may take additional time. Final decision by lender.",
+  "",
   "WHY VASTMYWEALTH:",
   "- Multi-lender platform — best lender matched to your profile",
   "- Approval-first approach — highest approval chances",
   "- Faster processing — pre-evaluated before login",
   "- End-to-end support — application to disbursal",
   "",
-  "CHANNEL PARTNER:",
+  "CHANNEL PARTNER PROGRAM:",
   "- No registration fee",
   "- Commission paid post disbursement",
-  "- Anyone can join",
+  "- Anyone can join — real estate agents, freelancers, DSAs, financial advisors, builders",
   "- Full support provided",
   "- You focus on sourcing — we handle the execution",
   "- NEVER say Welcome aboard or formally onboard",
-"- NEVER say best details share kar dete hain",
-"- If customer asks about channel partner, joining, earning, commission → templateType is ALWAYS PARTNER",
-"- First explain opportunity, collect Name + City + Profession, then set sendTemplate=true with templateType=PARTNER",
-"- Real estate consultant, broker, agent, DSA = perfect partner — still send templateType=PARTNER",
-
+  "- NEVER say best details share kar dete hain",
+  "- NEVER promise exact commission numbers",
+  "- If customer asks about channel partner, joining, earning, commission — templateType is ALWAYS PARTNER",
+  "- Real estate consultant, broker, agent, DSA = perfect partner — still send templateType=PARTNER",
+  "- First explain opportunity, collect Name + City + Profession, then set sendTemplate=true with templateType=PARTNER",
   "",
   "CIBIL SCORE KNOWLEDGE:",
   "Score ranges:",
@@ -74,14 +73,14 @@ const BOT_SYSTEM_PROMPT = [
   "- HL/LAP 600-650 — can process with some lenders",
   "- Above 750 — best rates and fast approval",
   "",
-  "How to improve CIBIL (share when asked):",
-  "1. Pay all EMIs and credit card bills on time — most important",
+  "How to improve CIBIL:",
+  "1. Pay all EMIs and credit card bills on time",
   "2. Keep credit card usage below 30% of limit",
   "3. Do not apply for multiple loans at once",
-  "4. Check CIBIL report for errors — dispute at cibil.com",
+  "4. Check CIBIL report for errors at cibil.com",
   "5. Do not close old credit cards",
   "6. Clear overdue payments first",
-  "7. Takes 4-6 months of consistent effort to improve",
+  "7. Takes 4-6 months of consistent effort",
   "",
   "Common CIBIL queries:",
   "- Checking score reduces it? NO — self-check is soft inquiry, score does not reduce",
@@ -95,6 +94,7 @@ const BOT_SYSTEM_PROMPT = [
   "4. ALWAYS say final decision by lender",
   "5. NEVER give false promises",
   "6. NEVER use words like: easily, guaranteed, 100% sure, pakka milega, definitely, confirm",
+  "7. NEVER promise exact commission numbers to partners",
   "",
   "SALES APPROACH:",
   "- Be like a friendly helpful salesperson — build rapport first",
@@ -110,10 +110,17 @@ const BOT_SYSTEM_PROMPT = [
   "Step 1: Greet warmly and ask what they need",
   "Step 2: Understand requirement carefully",
   "Step 3: Ask their name",
-  "Step 4: Ask loan amount needed",
-  "Step 5: Ask monthly income approximately",
-  "Step 6: Ask city",
-  "Step 7: Give brief encouraging summary then set sendTemplate=true",
+  "Step 4: Ask loan amount needed (for loan customers) or profession (for partners)",
+  "Step 5: Ask monthly income approximately (for loan customers) or city (for partners)",
+  "Step 6: Ask city (for loan customers)",
+  "Step 7: Send closing message and set sendTemplate=true",
+  "",
+  "CLOSING MESSAGE — when sending template:",
+  "- NEVER say Let me get you connected with our team",
+  "- NEVER say You are all set",
+  "- ALWAYS say: Please complete the application form in the next message. Our team will review and connect your application to the best lender!",
+  "- For partners say: Please complete the registration form in the next message. Our team will get in touch with you shortly!",
+  "- Keep it simple and action oriented",
   "",
   "WHEN CUSTOMER IS FRUSTRATED: Say I understand your concern. Our internal team will personally address your query within 24 hours.",
   "WHEN CUSTOMER WANTS HUMAN: Say Sure! Please leave your message and our team will get back to you shortly.",
@@ -138,14 +145,14 @@ const BOT_SYSTEM_PROMPT = [
   "",
   "RESPONSE FORMAT — Always respond in this exact JSON only, nothing else:",
   "{",
-  '  "message": "your response to customer",',
-  '  "loanType": "detected loan type or null",',
-  '  "customerName": "customer name if mentioned or null",',
-  '  "loanAmount": "loan amount if mentioned or null",',
-  '  "city": "city if mentioned or null",',
-  '  "employmentType": "Salaried or Self-Employed if mentioned or null",',
-  '  "sendTemplate": true or false,',
-  '  "templateType": "HL or LAP or PL or BL or BTTU or PARTNER or CF or null"',
+  "  \"message\": \"your response to customer\",",
+  "  \"loanType\": \"detected loan type or null\",",
+  "  \"customerName\": \"customer name if mentioned or null\",",
+  "  \"loanAmount\": \"loan amount if mentioned or null\",",
+  "  \"city\": \"city if mentioned or null\",",
+  "  \"employmentType\": \"Salaried or Self-Employed if mentioned or null\",",
+  "  \"sendTemplate\": true or false,",
+  "  \"templateType\": \"HL or LAP or PL or BL or BTTU or PARTNER or CF or null\"",
   "}",
   "",
   "Set sendTemplate=true ONLY after collecting name + loan type + amount + city OR after 7 messages",
@@ -156,15 +163,10 @@ const BOT_SYSTEM_PROMPT = [
   "- Personal Loan = PL",
   "- Business Loan = BL",
   "- Balance Transfer/Top Up = BTTU",
-  "- Partner/Join/Earn = PARTNER",
+  "- Partner/Join/Earn/Channel Partner/Commission = PARTNER",
   "- Construction Finance = CF",
   "- Unknown after 7 msgs = PL"
 ].join("\n");
-"CLOSING MESSAGE — when sending template:",
-"- NEVER say 'Let me get you connected with our team'",
-"- NEVER say 'You are all set'",
-"- ALWAYS say: 'Please complete the application form in the next message. Our team will review and connect your application to the best lender!'",
-"- Keep it simple and action oriented",
 
 // ============================================================
 // DETECT LOAN TYPE FROM KEYWORD
@@ -178,7 +180,8 @@ function detectLoanType(text) {
       t.includes("AGAINST")      || t.includes("MORTG"))               return "Loan Against Property";
   if (t.includes("PERSONAL")     || t === "PL"  || t.includes("#PL"))  return "Personal Loan";
   if (t.includes("PARTNER")      || t.includes("EARN") ||
-      t.includes("JOIN")         || t.includes("AGENT"))               return "Partner Inquiry";
+      t.includes("JOIN")         || t.includes("AGENT") ||
+      t.includes("CHANNEL"))                                            return "Partner Inquiry";
   if (t.includes("CONSTRUCTION") || t.includes("BUILDER"))             return "Construction Finance";
   if (t.includes("BALANCE")      || t.includes("TRANSFER") ||
       t.includes("TOP UP")       || t.includes("TOPUP"))               return "Balance Transfer + Top Up";
@@ -200,7 +203,7 @@ async function sendLoanTemplate(to, loanType) {
   } else if (lt.includes("PERSONAL") || lt === "PL" || lt.includes("BUSINESS") || lt === "BL") {
     return await sendTemplateWithImage(to, "welcome_unsecured",
       "https://drive.google.com/uc?export=download&id=1llb-yxEyzSR1JVEqdM4TmI7_ICDOFSrD");
-  } else if (lt.includes("PARTNER") || lt.includes("JOIN") || lt.includes("EARN")) {
+  } else if (lt.includes("PARTNER") || lt.includes("JOIN") || lt.includes("EARN") || lt.includes("CHANNEL")) {
     return await sendTemplateWithImage(to, "partner_recruitment",
       "https://drive.google.com/uc?export=download&id=18WCgSkS9sLmeI8YNgaLPKbBw-QJ90xPv");
   } else if (lt.includes("CONSTRUCTION") || lt.includes("BUILDER") || lt === "CF") {
@@ -242,6 +245,26 @@ async function storeInAppsScript(mobile, message) {
     console.log("Stored:", mobile);
   } catch (err) {
     console.error("storeInAppsScript error:", err.message);
+  }
+}
+
+// ============================================================
+// SAVE LEAD TO WA LEADS TAB
+// ============================================================
+async function saveLeadToSheet(mobile, name, loanType, city) {
+  try {
+    if (!process.env.APPS_SCRIPT_URL) return;
+    const url = process.env.APPS_SCRIPT_URL +
+      "?action=storeMessage" +
+      "&mobile="   + encodeURIComponent(mobile) +
+      "&message="  + encodeURIComponent("Bot qualified lead") +
+      "&name="     + encodeURIComponent(name     || "") +
+      "&loanType=" + encodeURIComponent(loanType || "") +
+      "&city="     + encodeURIComponent(city     || "");
+    await fetch(url);
+    console.log("Lead saved: " + mobile + " | " + name + " | " + loanType);
+  } catch(e) {
+    console.error("saveLeadToSheet error:", e.message);
   }
 }
 
@@ -350,6 +373,9 @@ async function callClaudeBot(userMessage, history) {
 
     const messages = history.concat([{role:"user", content: userMessage}]);
 
+    const controller = new AbortController();
+    const timeout    = setTimeout(function() { controller.abort(); }, 15000);
+
     const res = await fetch(ANTHROPIC_URL, {
       method : "POST",
       headers: {
@@ -357,13 +383,16 @@ async function callClaudeBot(userMessage, history) {
         "x-api-key"        : ANTHROPIC_KEY,
         "anthropic-version": "2023-06-01"
       },
-      body: JSON.stringify({
+      body  : JSON.stringify({
         model     : "claude-haiku-4-5",
         max_tokens: 400,
         system    : BOT_SYSTEM_PROMPT,
         messages  : messages
-      })
+      }),
+      signal: controller.signal
     });
+
+    clearTimeout(timeout);
 
     const data = await res.json();
     if (data.content && data.content[0]) {
@@ -447,17 +476,6 @@ app.post("/webhook", async function(req, res) {
 
     const from = message.from;
     let text   = "";
-// Deduplicate messages
-const msgId = message.id;
-if (!conversations._processedIds) conversations._processedIds = {};
-if (conversations._processedIds[msgId]) {
-  console.log("Duplicate message ignored: " + msgId);
-  return;
-}
-conversations._processedIds[msgId] = true;
-// Clean old IDs
-const ids = Object.keys(conversations._processedIds);
-if (ids.length > 100) delete conversations._processedIds[ids[0]];
 
     if (message.type === "text") {
       text = (message.text && message.text.body) || "";
@@ -468,6 +486,17 @@ if (ids.length > 100) delete conversations._processedIds[ids[0]];
              (message.interactive && message.interactive.list_reply && message.interactive.list_reply.title) || "Chat";
     }
 
+    // Deduplicate messages
+    const msgId = message.id;
+    if (!conversations._processedIds) conversations._processedIds = {};
+    if (conversations._processedIds[msgId]) {
+      console.log("Duplicate message ignored: " + msgId);
+      return;
+    }
+    conversations._processedIds[msgId] = true;
+    const ids = Object.keys(conversations._processedIds);
+    if (ids.length > 100) delete conversations._processedIds[ids[0]];
+
     console.log("Incoming from " + from + ": " + text);
 
     // STEP 1: Store message
@@ -476,15 +505,14 @@ if (ids.length > 100) delete conversations._processedIds[ids[0]];
     // STEP 2: Check if template already sent
     const alreadySent = await isTemplateAlreadySent(from);
 
-// If template sent BUT customer clicked Chat button → reactivate bot
-const isChatButton = text === "Chat with us" || text === "💬 Chat with us" || 
-                     text.toLowerCase().includes("chat");
+    // If template sent BUT customer clicked Chat button — reactivate bot
+    const isChatButton = text === "Chat with us" || text === "Chat" ||
+                         text.toLowerCase().includes("chat with");
 
-if (alreadySent && !isChatButton) {
-  console.log("Template already sent — bot inactive: " + from);
-  return;
-}
-
+    if (alreadySent && !isChatButton) {
+      console.log("Template already sent — bot inactive: " + from);
+      return;
+    }
 
     // STEP 3: Detect loan type from keyword
     const detectedLoanType = detectLoanType(text);
@@ -497,7 +525,6 @@ if (alreadySent && !isChatButton) {
     if (detectedLoanType && isShortKeyword && !hasActiveSession) {
       console.log("Short keyword — direct template: " + from);
       await sendLoanTemplate(from, detectedLoanType);
-      delete conversations[from];
       return;
     }
 
@@ -510,6 +537,7 @@ if (alreadySent && !isChatButton) {
         msgCount    : 0,
         loanType    : null,
         name        : null,
+        city        : null,
         templateSent: false
       };
     }
@@ -532,9 +560,8 @@ if (alreadySent && !isChatButton) {
     if (conv.messages.length > 12) conv.messages = conv.messages.slice(-12);
 
     if (botResponse.customerName) conv.name     = botResponse.customerName;
-if (botResponse.loanType)     conv.loanType = botResponse.loanType;
-if (botResponse.city)         conv.city     = botResponse.city;
-
+    if (botResponse.loanType)     conv.loanType = botResponse.loanType;
+    if (botResponse.city)         conv.city     = botResponse.city;
 
     // Save conversation async
     saveConversation(from, "customer", text);
@@ -545,39 +572,26 @@ if (botResponse.city)         conv.city     = botResponse.city;
 
     // Send template if bot decided
     if (botResponse.sendTemplate && botResponse.templateType && !conv.templateSent) {
-  conv.templateSent = true;
-  console.log("Bot sending template: " + botResponse.templateType + " to " + from);
-
-  // Save lead to WA Leads tab
-  try {
-    const saveUrl = process.env.APPS_SCRIPT_URL +
-      "?action=storeMessage" +
-      "&mobile="   + encodeURIComponent(from) +
-      "&message="  + encodeURIComponent("Bot qualified lead") +
-      "&name="     + encodeURIComponent(conv.name     || "") +
-      "&loanType=" + encodeURIComponent(conv.loanType || botResponse.templateType || "") +
-      "&city="     + encodeURIComponent(conv.city     || botResponse.city || "");
-    await fetch(saveUrl);
-    console.log("Lead saved to WA Leads: " + from);
-  } catch(e) {
-    console.error("Save lead error:", e.message);
-  }
-
-  await new Promise(function(r) { setTimeout(r, 1500); });
-  await sendLoanTemplate(from, botResponse.templateType);
-  return;
-}
-
+      conv.templateSent = true;
+      console.log("Bot sending template: " + botResponse.templateType + " to " + from);
+      // Save lead to WA Leads
+      await saveLeadToSheet(from, conv.name, conv.loanType || botResponse.templateType, conv.city);
+      await new Promise(function(r) { setTimeout(r, 1500); });
+      await sendLoanTemplate(from, botResponse.templateType);
+      return;
+    }
 
     // Force after 7 messages
     if (conv.msgCount >= 7 && !conv.templateSent) {
       conv.templateSent = true;
       console.log("7 messages — forcing template for " + from);
       const forcedType = conv.loanType || "Personal Loan";
-      await sendTextMessage(from, "Ab main aapke liye next steps bhej raha hoon!");
+      await sendTextMessage(from, "Please complete the application form in the next message. Our team will review and connect your application to the best lender!");
+      // Save lead to WA Leads
+      await saveLeadToSheet(from, conv.name, forcedType, conv.city);
       await new Promise(function(r) { setTimeout(r, 1500); });
       await sendLoanTemplate(from, forcedType);
-      }
+    }
 
   } catch (err) {
     console.error("Webhook error:", err.message);
