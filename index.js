@@ -160,6 +160,11 @@ const BOT_SYSTEM_PROMPT = [
   "- Construction Finance = CF",
   "- Unknown after 7 msgs = PL"
 ].join("\n");
+"CLOSING MESSAGE — when sending template:",
+"- NEVER say 'Let me get you connected with our team'",
+"- NEVER say 'You are all set'",
+"- ALWAYS say: 'Please complete the application form in the next message. Our team will review and connect your application to the best lender!'",
+"- Keep it simple and action oriented",
 
 // ============================================================
 // DETECT LOAN TYPE FROM KEYWORD
