@@ -180,6 +180,7 @@ function detectLoanType(text) {
   if (t.includes("PROPERTY")     || t === "LAP" || t.includes("#LAP") ||
       t.includes("AGAINST")      || t.includes("MORTG"))               return "Loan Against Property";
   if (t.includes("PERSONAL")     || t === "PL"  || t.includes("#PL"))  return "Personal Loan";
+  if (t === "LOANS" || t === "LOAN") return "Personal Loan";
   if (t.includes("PARTNER")      || t.includes("EARN") ||
       t.includes("JOIN")         || t.includes("AGENT") ||
       t.includes("CHANNEL"))                                            return "Partner Inquiry";
