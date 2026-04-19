@@ -525,10 +525,15 @@ app.post("/webhook", async function(req, res) {
     const isShortKeyword   = text.trim().split(" ").length <= 3;
 
     if (detectedLoanType && isShortKeyword && !hasActiveSession) {
-      console.log("Short keyword — direct template: " + from);
-      await sendLoanTemplate(from, detectedLoanType);
-      return;
-    }
+  if (detectedLoanType === "Construction Finance") {
+    console.log("CF — routing to bot: " + from);
+  } else {
+    console.log("Short keyword — direct template: " + from);
+    await sendLoanTemplate(from, detectedLoanType);
+    return;
+  }
+}
+
 
     // STEP 5: AI Bot handles
     console.log("AI Bot for " + from);
