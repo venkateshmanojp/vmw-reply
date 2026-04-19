@@ -121,6 +121,8 @@ const BOT_SYSTEM_PROMPT = [
   "- ALWAYS say: Please complete the application form in the next message. Our team will review and connect your application to the best lender!",
   "- For partners say: Please complete the registration form in the next message. Our team will get in touch with you shortly!",
   "- Keep it simple and action oriented",
+  "- ALWAYS mention: 📌 Please upload bank statement as PDF without password for faster processing",
+
   "",
   "WHEN CUSTOMER IS FRUSTRATED: Say I understand your concern. Our internal team will personally address your query within 24 hours.",
   "WHEN CUSTOMER WANTS HUMAN: Say Sure! Please leave your message and our team will get back to you shortly.",
