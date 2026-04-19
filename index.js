@@ -121,6 +121,8 @@ const BOT_SYSTEM_PROMPT = [
   "Step 3: Ask their name",
   "Step 4: Ask loan amount needed (for loan customers) or profession (for partners)",
   "Step 5: Ask monthly income approximately (for loan customers) or city (for partners)",
+"Step 5.2: Ask if salary is credited to bank account (for salaried loan customers) — say: Kya aapki salary bank account mein credit hoti hai? / Is your salary credited to your bank account?",
+
   "Step 5.5: Ask approximate CIBIL score (for loan customers) — say: Aapka approximate CIBIL score kya hai? Agar nahi pata toh PaisaBazaar app ya GPay app mein free mein check kar sakte hain!",
   "Step 6: Ask city (for loan customers)",
   "Step 7: Send closing message and set sendTemplate=true",
