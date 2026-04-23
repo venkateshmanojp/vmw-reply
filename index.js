@@ -462,7 +462,8 @@ async function callClaudeBot(userMessage, history) {
       body  : JSON.stringify({
         model     : "claude-haiku-4-5",
         max_tokens: 400,
-        system    : BOT_SYSTEM_PROMPT,
+        system: BOT_SYSTEM_PROMPT.join("\n"),
+
         messages  : messages
       }),
       signal: controller.signal
@@ -638,7 +639,7 @@ app.post("/webhook", async function(req, res) {
     // Update history
     conv.messages.push({role:"user",      content: text});
     conv.messages.push({role:"assistant", content: JSON.stringify(botResponse)});
-    if (conv.messages.length > 12) conv.messages = conv.messages.slice(-12);
+    if (conv.messages.length > 8) conv.messages = conv.messages.slice(-8);
 
     if (botResponse.customerName) conv.name     = botResponse.customerName;
     if (botResponse.loanType)     conv.loanType = botResponse.loanType;
