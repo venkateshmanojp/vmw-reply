@@ -462,7 +462,7 @@ async function callClaudeBot(userMessage, history) {
       body  : JSON.stringify({
         model     : "claude-haiku-4-5",
         max_tokens: 400,
-        system: BOT_SYSTEM_PROMPT.join("\n"),
+        system: BOT_SYSTEM_PROMPT,
 
         messages  : messages
       }),
