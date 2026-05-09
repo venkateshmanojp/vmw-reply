@@ -361,6 +361,8 @@ RESPONSE FORMAT — Always respond in this exact JSON only, nothing else:
   "customerAge": "age if mentioned or null",
   "loanAmount": "loan amount if mentioned or null",
   "city": "city if mentioned or null",
+  "state": "state if mentioned or null",
+
   "employmentType": "Salaried or Self-Employed if mentioned or null",
   "monthlyIncome": "income if mentioned or null",
   "cibilScore": "CIBIL if mentioned or null",
