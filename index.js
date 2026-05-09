@@ -976,8 +976,7 @@ Please register here: https://forms.gle/LWN949M1k9khsUrGA`);
                  session.city && session.monthlyIncome &&
                  session.cibilScore && session.customerAge;
 var hasMinDocs = session.documents && 
-                 (session.documents.pan || session.documents.aadhar || 
-                  session.documents.bank);
+                 Object.keys(session.documents).length >= 1;
 
 if (botResponse.sendCaseSummary && !session.caseSummarySent && hasMinInfo && hasMinDocs) {
 
