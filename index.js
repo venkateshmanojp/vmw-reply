@@ -220,7 +220,7 @@ Step 8: Ask approximate CIBIL — "Aapka approximate CIBIL score kya hai? Agar n
 Step 9: Ask existing EMIs — how many loans, which banks, monthly EMI amount
 Step 10: Ask cheque/ECS bounces in last 6 months
 Step 10.5: If PL/BL — ask credit enquiries in last 1 month
-Step 11: Ask city
+Step 11: Ask city and state (for loan customer)
 Step 11.5: If HL/LAP — ask property details (type, location, value, existing loan?)
 Step 11.6: If HL/LAP — ask co-applicant details (name, income)
 Step 12: QUALIFY based on all criteria
