@@ -373,10 +373,20 @@ RESPONSE FORMAT — Always respond in this exact JSON only, nothing else:
   "sendCaseSummary": true or false
 }
 
-Set sendCaseSummary=true ONLY when:
-- Minimum documents received (PAN + Aadhar + Bank Statement) AND
-- All qualification questions answered AND
-- Customer is eligible
+Set sendCaseSummary=true ONLY when ALL of these are true:
+- Customer name collected ✅
+- Loan type confirmed ✅
+- Age collected ✅
+- Employment type confirmed ✅
+- Monthly income collected ✅
+- CIBIL score collected ✅
+- Existing EMIs asked ✅
+- Bounces asked ✅
+- City collected ✅
+- Customer is ELIGIBLE (not declined) ✅
+- Minimum documents received (PAN + Aadhar + Bank Statement) ✅
+- NEVER set sendCaseSummary=true during qualification questions!
+- NEVER set sendCaseSummary=true before documents are received!
 
 Set qualificationStatus=DECLINED when any decline criteria is met
 Set partnerMode=true when customer is verified approved partner`;
@@ -962,8 +972,16 @@ Please register here: https://forms.gle/LWN949M1k9khsUrGA`);
     }
 
     // ── TRIGGER CASE SUMMARY ─────────────────────────────────
-    if (botResponse.sendCaseSummary && !session.caseSummarySent) {
-      session.caseSummarySent = true;
+    var hasMinInfo = session.name && session.loanType && 
+                 session.city && session.monthlyIncome &&
+                 session.cibilScore && session.customerAge;
+var hasMinDocs = session.documents && 
+                 (session.documents.pan || session.documents.aadhar || 
+                  session.documents.bank);
+
+if (botResponse.sendCaseSummary && !session.caseSummarySent && hasMinInfo && hasMinDocs) {
+
+    session.caseSummarySent = true;
       console.log("Case summary triggered for: " + from);
 
       // Save lead to WA Leads
