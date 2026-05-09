@@ -855,10 +855,10 @@ app.post("/webhook", async function(req, res) {
 
     // Check if already processed (case summary sent)
     const conv = conversations[from] || {};
-    if (conv.caseSummarySent) {
-      console.log("Case already sent — bot inactive: " + from);
-      return;
-    }
+    if (conversations[from] && conversations[from].caseSummarySent) {
+  console.log("Case already sent — bot inactive: " + from);
+  return;
+}
 
     // Initialize conversation
     if (!conversations[from]) {
@@ -1001,7 +1001,7 @@ if (botResponse.sendCaseSummary && !session.caseSummarySent && hasMinInfo && has
 
     // ── HANDLE DECLINED CASE ────────────────────────────────
     if (botResponse.qualificationStatus === "DECLINED") {
-      session.caseSummarySent = true; // Stop further processing
+ // Stop further processing
       await saveLeadToSheet(from, session.name, session.loanType, session.city, "Declined");
       return;
     }
