@@ -855,8 +855,9 @@ app.post("/webhook", async function(req, res) {
 
     // Check if already processed (case summary sent)
     const conv = conversations[from] || {};
-    if (conversations[from] && conversations[from].caseSummarySent) {
-  console.log("Case already sent — bot inactive: " + from);
+   if (conversations[from] && conversations[from].caseSummarySent) {
+  console.log("Case already sent — responding normally");
+  await sendTextMessage(from, "Hi! 😊 Our team has received your file and will connect with you very soon!\n\nIf you have any questions feel free to ask — I am here to help!");
   return;
 }
 
