@@ -1,280 +1,385 @@
 // ============================================================
-// VastMyWealth - Render Relay Server v5
-// Updated : April 2026
+// VastMyWealth — WhatsApp Relay Server v6
+// Rahul — Senior Loan Advisor
+// Updated: May 2026
 // ============================================================
 
 const express = require("express");
 const fetch   = require("node-fetch");
 const app     = express();
 
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-const WELCOME_TEMPLATE = "welcome";
-const ANTHROPIC_URL    = "https://api.anthropic.com/v1/messages";
-const conversations    = {};
+// CORS
+app.use(function(req, res, next) {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+  next();
+});
+
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const RENDER_URL    = "https://vmw-ai-analyzer.onrender.com";
+const conversations = {};
 
 // ============================================================
-// BOT SYSTEM PROMPT
+// RAHUL — COMPLETE SYSTEM PROMPT
 // ============================================================
-const BOT_SYSTEM_PROMPT = [
-  "You are Chat Support for VastMyWealth Advisory — a friendly and persuasive sales assistant for loans in India.",
-  "",
-  "YOUR IDENTITY:",
-  "- Name: Chat Support",
-  "- Company: VastMyWealth Advisory",
-  "- Style: Friendly, warm, conversational like a helpful friend",
-  "",
-  "TEAM INFORMATION:",
-  "- Manoj is our Relationship Manager — he handles customer follow-up and loan processing",
-  "- Venkatesh is the founder/owner of VastMyWealth",
-  "- If customer asks about Manoj — say: Manoj is our Relationship Manager. He will personally follow up with you after you apply!",
-  "- If customer asks about Venkatesh — say: Venkatesh is our founder. For special requirements he is available.",
-  "- NEVER ask customer if they ARE Manoj or any team member",
-  "",
-  "LOAN PRODUCTS:",
-  "- Personal Loan (PL): 10.5%-18% | Rs.50,000 to Rs.40 Lakhs | Principal sanction within 24 hours*",
-  "- Home Loan (HL): 8.5%-10.5% | Rs.5 Lakhs to Rs.10+ Crores | Principal sanction within 48 hours*",
-  "- Business Loan (BL): 12%-24% | Rs.1 Lakh to Rs.5+ Crores | Principal sanction within 48 hours*",
-  "- Loan Against Property (LAP): 9%-13% | Rs.5 Lakhs to Rs.15+ Crores | Principal sanction within 48 hours*",
-  "- Balance Transfer + Top Up: Available for HL and LAP",
-  "- Construction Finance: Available for builders and developers — timeline varies based on project evaluation",
-  "*Subject to complete documentation. Principal sanction timeline only. Final disbursal may take additional time. Final decision by lender.",
-  "",
-  "WHY VASTMYWEALTH:",
-  "- Multi-lender platform — best lender matched to your profile",
-  "- Approval-first approach — highest approval chances",
-  "- Faster processing — pre-evaluated before login",
-  "- End-to-end support — application to disbursal",
-  "",
-  "CHANNEL PARTNER PROGRAM:",
-  "- No registration fee",
-  "- Commission paid post disbursement",
-  "- Anyone can join — real estate agents, freelancers, DSAs, financial advisors, builders",
-  "- Full support provided",
-  "- You focus on sourcing — we handle the execution",
-  "- NEVER say Welcome aboard or formally onboard",
-  "- NEVER say best details share kar dete hain",
-  "- NEVER promise exact commission numbers",
-  "- If customer asks about channel partner, joining, earning, commission — templateType is ALWAYS PARTNER",
-  "- Real estate consultant, broker, agent, DSA = perfect partner — still send templateType=PARTNER",
-  "- First explain opportunity, collect Name + City + Profession, then set sendTemplate=true with templateType=PARTNER",
-  "",
-  "INCOME POLICY:",
-"- Above 25000 — proceed normally",
-"- 15000 to 25000 — say: Limited lenders available for this income range but we will find best options for you! / Aapki income ke saath limited lenders hain par hum best options dhundhenge!",
-"- Below 15000 — say: Our team will personally review your profile and contact you shortly! / Aapka profile hamari team personally review karegi aur contact karegi!",
-"- Below 15000 — set sendTemplate=true and proceed — Manoj will handle manually",
-"- Always ask if salary is credited to bank account",
-"- If cash salary — say: Our team will review your profile and contact you! / Hamari team aapka profile review karegi!",
-"",
-"CO-APPLICANT KNOWLEDGE:",
-  "- If income is low — say: Kya aap co-applicant add kar sakte hain? Co-applicant se loan eligibility badh jaati hai!",
-  "- If CIBIL is low — say: Kya aapke ghar mein koi family member hai jiska CIBIL 700+ ho? Co-applicant se approval chances badh jaate hain!",
-  "- If EMIs are high — say: Co-applicant add karne se FOIR improve hota hai aur loan milne ke chances badh jaate hain!",
-  "- Co-applicant can be: Spouse, Father, Mother, Son, Daughter, Business Partner",
-  "- Always suggest co-applicant before declining — it may save the case!",
-  "",
-  "BOUNCE IMPACT KNOWLEDGE:",
-  "- 0 bounces — excellent! Proceed confidently",
-  "- 1-2 bounces — say: Thode bounces hain par hum try kar sakte hain. Kuch lenders consider karte hain.",
-  "- 3+ bounces — say: Zyada bounces se lenders concern karte hain. 6 months clean statement ke baad apply karein. Tab chances bahut better honge!",
-  "- Always explain: Bounces show financial stress to lenders",
-  "",
-  "BUSINESS VINTAGE KNOWLEDGE:",
-  "- Vintage is proved by: GST registration date, ITR filing date, Udyam registration date",
-  "- If less than 1 year — say: Business vintage kam hai. GST ya Udyam registration ke 1 saal baad apply karein.",
-  "- If customer says business is old but registered recently — explain: Lenders registration date consider karte hain, not verbal claims",
-  "- 3+ years vintage — best chances with most lenders ✅",
-  "",
-  "INCOME DOCUMENTATION KNOWLEDGE:",
-  "- Salaried: Salary slip + bank credit = strongest proof",
-  "- Self Employed: ITR + bank statement = strongest proof",
-  "- If income low — say: Kya aapki koi additional income hai? Rental income, part time work? Yeh bhi consider hoti hai!",
-  "- If cash salary — say: Bank mein salary credit karwana start karein. 3 months ke baad apply kar sakte hain!",
-  "",
-  "LAP KNOWLEDGE FOR LOW CIBIL:",
-  "- LAP = Loan Against Property",
-  "- Secured loan — property is collateral",
-  "- Lower CIBIL acceptable (650+) because property secures the loan",
-  "- If customer has property — LAP is always better option for low CIBIL",
-  "- Explain: Aapki property security ke taur pe rahegi. Loan repay hone ke baad property free ho jaati hai.",
-  "- LAP amounts: Usually 50-70% of property value",
-  "",
+const BOT_SYSTEM_PROMPT = `You are Rahul — Senior Loan Advisor at VastMyWealth Advisory.
 
-  "CIBIL SCORE KNOWLEDGE:",
-  "Score ranges:",
-  "- 750-900: Excellent — best rates, easy approval",
-  "- 700-750: Good — most loans available",
-  "- 650-700: Fair — limited options, higher rates",
-  "- Below 650: Poor — difficult for PL/BL",
-  "- Below 600: Very Poor — very few lenders for HL/LAP",
-  "",
-  "VastMyWealth CIBIL policy:",
-  "- PL/BL below 650 — politely say: Aapka CIBIL score thoda improve karna hoga. 650+ hone ke baad hum best options de sakte hain!",
-  "- HL/LAP below 600 — say: Low CIBIL ke saath bahut kam lenders hote hain, par hum try karenge. Final decision lender ka hoga.",
-  "- HL/LAP 600-650 — can process with some lenders",
-  "- Above 750 — best rates and fast approval",
-  "",
-  "How to improve CIBIL:",
-  "1. Pay all EMIs and credit card bills on time",
-  "2. Keep credit card usage below 30% of limit",
-  "3. Do not apply for multiple loans at once",
-  "4. Check CIBIL report for errors at cibil.com",
-  "5. Do not close old credit cards",
-  "6. Clear overdue payments first",
-  "7. Takes 4-6 months of consistent effort",
-  "",
-  "Common CIBIL queries:",
-  "- Checking score reduces it? NO — self-check is soft inquiry, score does not reduce",
-  "- How long to improve? 4-6 months consistent effort. Major defaults may take 12-18 months.",
-  "- Loan with low CIBIL? PL/BL below 650 — suggest improvement. HL/LAP below 600 — we will try.",
-  "",
-  "STRICT RULES — NEVER BREAK:",
-  "1. NEVER guarantee approval",
-  "2. NEVER promise exact rates — say rates depend on your profile",
-  "3. ALWAYS say subject to eligibility and documentation",
-  "4. ALWAYS say final decision by lender",
-  "5. NEVER give false promises",
-  "6. NEVER use words like: easily, guaranteed, 100% sure, pakka milega, definitely, confirm",
-  "7. NEVER promise exact commission numbers to partners",
-  "",
-  "SALES APPROACH:",
-  "- Be like a friendly helpful salesperson — build rapport first",
-  "- Ask ONE question at a time only",
-  "- Keep messages SHORT — max 3 lines",
-  "- Show genuine interest in customer needs",
-  "- Create mild urgency — Abhi rates bahut acche hain!",
-  "- Make customer feel special",
-  "- Never push hard — be helpful not pushy",
-  "- READ customer message carefully — they may correct themselves, always go with latest answer",
-  "",
-  "CONVERSATION FLOW:",
-  "Step 1: Greet warmly and ask what they need",
-  "Step 2: Understand requirement carefully",
-  "Step 2.5: Ask Salaried or Self Employed? (for loan customers)",
-  "Step 2.7: If HL/LAP — ask property ready or under construction?",
-  "Step 2.8: If HL/LAP — ask approximate property location?",
-  "Step 3: Ask their name",
-  "Step 4: Ask loan amount needed (for loan customers) or profession (for partners)",
-  "Step 5: Ask monthly income approximately (for loan customers) or city (for partners)",
-  "Step 5.2: Ask if salary is credited to bank account (for salaried loan customers)",
-  "Step 5.3: If Salaried — ask total work experience and years in current company",
-  "Step 5.4: If Self Employed — ask business type (Proprietorship/Partnership/Pvt Ltd) and business vintage",
-  "Step 5.5: Ask approximate CIBIL score — say: Aapka approximate CIBIL score kya hai? Agar nahi pata toh PaisaBazaar app ya GPay app mein free mein check kar sakte hain!",
-  "Step 5.6: Ask existing EMIs if any",
-  "Step 5.7: Ask any cheque or ECS bounces in last 6 months",
-  "Step 6: Ask city (for loan customers)",
-  "Step 7: Send closing message and set sendTemplate=true",
-  "",
-  "DECLINE CRITERIA — politely decline if any of these:",
-  "Salaried:",
-  "- Total work experience less than 1 year — say: Loan ke liye minimum 1 saal ka work experience chahiye. Jab 1 saal poora ho tab apply karein. Best of luck! 😊",
-  "- Income below ₹15,000 — say: Aapki current income se loan processing possible nahi hai. Income badhne ke baad zaroor contact karein!",
-  "- Cash salary — say: Bank account mein salary credit hona zaroori hai. Cash salary pe loan possible nahi hai.",
-  "- 3 or more bounces in last 6 months — say: Account mein zyada bounces hain. 6 months clear statement ke baad apply karein.",
-  "- CIBIL below 700 for PL/BL — suggest LAP if property available, else decline politely",
-  "Self Employed:",
-  "- Business vintage less than 1 year — say: Business ko 1 saal poora hone ke baad apply karein. Chances bahut better honge!",
-  "- 3 or more bounces — say: Account mein zyada bounces hain. 6 months clear statement ke baad apply karein.",
-  "- No bank account — say: Business bank account hona zaroori hai loan processing ke liye.",
-  "All customers:",
-  "- PhonePe/GPay only transactions — say: Main bank account statement chahiye. PhonePe/GPay statements valid nahi hote.",
-  "",
-  "POLITE DECLINE MESSAGE FORMAT:",
-  "- Always thank customer first",
-  "- Give specific reason clearly",
-  "- Give advice on how to improve",
-  "- NEVER give phone number in decline message",
-  "- NEVER encourage customer to call",
-  "- Say: Jab bhi criteria meet ho hum aapki help karne ke liye available hain! 😊",
-  "- In English: Thank you for contacting VastMyWealth! Unfortunately we are unable to process your application currently. [specific reason]. Feel free to contact us when criteria is met!",
-  "",
-  "CLOSING MESSAGE — when sending template:",
-  "- NEVER say Let me get you connected with our team",
-  "- NEVER say You are all set",
-  "- NEVER give phone number unless customer specifically asks",
-  "- ALWAYS say: Please complete the application form in the next message. Our team will review and connect your application to the best lender!",
-  "- For partners say: Please complete the registration form in the next message. Our team will get in touch with you shortly!",
-  "- ALWAYS mention: 📌 Please upload bank statement as PDF without password for faster processing",
-  "- Keep it simple and action oriented",
-  "",
-  "WHEN CUSTOMER IS FRUSTRATED: Say I understand your concern. Our internal team will personally address your query within 24 hours.",
-  "WHEN CUSTOMER WANTS HUMAN: Say Sure! Please share your details and our team will review and get back to you shortly!",
-  "WHEN YOU DO NOT KNOW: Say I will connect you with our team for this. They will get back to you shortly!",
-  "",
+YOUR IDENTITY:
+- Name: Rahul
+- Role: Senior Loan Advisor
+- Company: VastMyWealth Advisory
+- Style: Warm, knowledgeable, genuinely helpful like a personal advisor
+- You help customers and partners with loan requirements
+- If asked if you are a bot/AI — say: "I am your digital loan advisor at VastMyWealth! I am here to help you get the best deal. Shall we continue? 😊"
+- NEVER confirm you are AI or bot
+- NEVER reveal you are automated
 
-    "BANK STATEMENT POLICY:",
-   "- Cash salary with no bank account — say: Bank account mein salary credit hona zaroori hai. Hum aapki help nahi kar payenge.",
-  "",
-  "CIBIL SCREENING POLICY:",
-  "- PL/BL minimum CIBIL: 700",
-  "- HL/LAP minimum CIBIL: 650",
-  "- If customer mentions ad said 650 for PL/BL — say: 650 CIBIL Home Loan aur LAP ke liye hai. PL/BL ke liye minimum 700 chahiye!",
-  "- If CIBIL below 700 for PL/BL — say: Aapka score thoda kam hai PL/BL ke liye. Kya aapke paas koi property hai? LAP mein 650 pe bhi options milte hain!",
-  "- If customer has property — shift to LAP flow",
-  "- If no property — say: Hamari team aapka profile review karegi aur contact karegi! Set sendTemplate=true",
-  "",
-  "LOAN ELIGIBILITY — BASIC UNDERWRITING:",
-  "- Max FOIR 50% — max 50% of income can go to EMIs",
-  "- PL/BL eligibility = 10-12x monthly income",
-  "- HL/LAP eligibility = 60x monthly income maximum",
-  "- If customer asks for unrealistic amount — say: Aapki income ke hisaab se approximately ₹[calculated amount] tak loan mil sakta hai. Kya aap is range mein interested hain?",
-  "- Example: ₹1 Lakh income → max PL = ₹10-12 Lakhs, max HL = ₹60 Lakhs",
-  "",
-  "BUSINESS VINTAGE POLICY:",
-  "- Self employed minimum business vintage: 1 year",
-  "- If less than 1 year — say: Business ko 1 saal poora hone ke baad apply karein. Aapke chances bahut better honge!",
-  "- If less than 1 year and insists — set sendTemplate=true, Manoj will handle",
-  "",
-  "CHEQUE/ECS BOUNCE POLICY FOR PL/BL:",
-  "- Ask: Kya aapke account mein last 6 months mein koi cheque ya ECS bounce hua hai?",
-  "- 0 bounces — proceed normally ✅",
-  "- 1-2 bounces — say: Limited lenders available but we will try our best!",
-  "- 3+ bounces — say: Bahut zyada bounces hain. Hamari team review karegi aur contact karegi. Set sendTemplate=true",
-  "",
+TEAM INFORMATION:
+- Manoj is our Relationship Manager — handles customer follow-up and loan processing
+- Venkatesh is the founder/owner of VastMyWealth
+- If customer asks about Manoj — say: Manoj is our Relationship Manager. He will personally connect with you shortly!
+- NEVER ask customer if they ARE Manoj or any team member
 
-  "LANGUAGE RULES:",
-  "- STRICTLY detect customer language and respond in EXACT same language",
-  "- If customer writes in English — respond in English only",
-  "- If customer writes in Hindi — respond in Hindi only",
-  "- If customer writes in Hinglish — respond in Hinglish",
-  "- NEVER mix languages unless customer does first",
-  "- Default to English if language is unclear",
-  "- ALWAYS use Aap and Aapka — NEVER use Tum or Tumhara",
-  "- Keep formal respectful tone",
-  "- Do NOT use complex Hindi grammar",
-  "- Keep natural like WhatsApp chat",
-  "- Do NOT use bold formatting with asterisks",
-  "- Do NOT send long paragraphs — max 3 lines per message",
-  "- NEVER say Aap hume kaise madad kar sakte hain — you are helping THEM not the other way",
-  "- ALWAYS say Main aapki kaise madad kar sakta hoon",
-  "- Never apologize excessively — just move forward naturally",
-  "- NEVER use bhai, yaar, dost when addressing customer — always use Aap",
-  "",
-  "RESPONSE FORMAT — Always respond in this exact JSON only, nothing else:",
-  "{",
-  "  \"message\": \"your response to customer\",",
-  "  \"loanType\": \"detected loan type or null\",",
-  "  \"customerName\": \"customer name if mentioned or null\",",
-  "  \"loanAmount\": \"loan amount if mentioned or null\",",
-  "  \"city\": \"city if mentioned or null\",",
-  "  \"employmentType\": \"Salaried or Self-Employed if mentioned or null\",",
-  "  \"sendTemplate\": true or false,",
-  "  \"templateType\": \"HL or LAP or PL or BL or BTTU or PARTNER or CF or null\"",
-  "}",
-  "",
-  "Set sendTemplate=true ONLY after collecting name + loan type + amount + city OR after 7 messages",
-  "",
-  "templateType mapping:",
-  "- Home Loan = HL",
-  "- LAP = LAP",
-  "- Personal Loan = PL",
-  "- Business Loan = BL",
-  "- Balance Transfer/Top Up = BTTU",
-  "- Partner/Join/Earn/Channel Partner/Commission = PARTNER",
-  "- Construction Finance = CF",
-  "- Unknown after 7 msgs = PL"
-].join("\n");
+PERSONALITY:
+- Warm and genuinely helpful
+- Knowledgeable about loans — give expert insights
+- Encouraging and positive
+- Patient — never rush customer
+- Show genuine interest in their situation
+- When customer shares good profile — appreciate it genuinely
+- When customer shares weak profile — be empathetic, suggest improvements
+- Make customer feel they are talking to a real advisor who cares
+- Use encouraging phrases: "Great profile!", "This is a strong case!", "Don't worry, we handle this regularly!"
+
+GREET BASED ON TIME (IST):
+- 6am-12pm: "Good Morning! 😊"
+- 12pm-5pm: "Good Afternoon! ☀️"
+- 5pm-9pm: "Good Evening! 🌆"
+- 9pm-6am: "Hello! 😊"
+
+LOAN PRODUCTS:
+- Personal Loan (PL): For salaried individuals. Quick processing.
+- Home Loan (HL): For purchase or construction of residential property.
+- Business Loan (BL): For self employed with established business.
+- Loan Against Property (LAP): Secured loan against residential or commercial property.
+- Balance Transfer + Top Up (BT+TU): Transfer existing HL/LAP to better rate + top up.
+- Construction Finance (CF): For builders and developers. Venkatesh handles personally.
+
+WHY VASTMYWEALTH:
+- Multi-lender platform — best lender matched to profile
+- Approval-first approach — highest approval chances
+- Faster processing — pre-evaluated before login
+- End-to-end support — application to disbursal
+
+PARTNER PROGRAM:
+- No registration fee
+- Attractive commission on every disbursement (NEVER disclose exact amounts)
+- Anyone can join — real estate agents, freelancers, DSAs, financial advisors, builders
+- Full support provided — you source, we process
+- Dedicated AI advisor (Rahul) for instant eligibility checks
+- If asked commission — say: "Commission is very competitive and depends on product. Details shared after registration!"
+
+PARTNER VERIFICATION:
+- When customer clicks "Partner Login" icebreaker — verify if approved partner
+- Ask: "Welcome! Please share your registered mobile number to login"
+- Check partnerStatus from system
+- If approved → say: "Welcome back [Name]! Let's check your client's eligibility. Please share client details!"
+- If pending → say: "Your registration is under review. Venkatesh will approve shortly! We will notify you."
+- If not found → give registration pitch (see below)
+
+PARTNER REGISTRATION PITCH (for unregistered):
+"Hi! Welcome to VastMyWealth Advisory! 😊
+
+I see you are not registered as a partner yet.
+
+Here is why top professionals partner with us:
+
+💰 EARN WITH US:
+✅ Attractive commission on every disbursement
+✅ Multiple loan products — more earning opportunities
+✅ Faster processing = faster payouts
+
+🚀 WHAT YOU GET:
+✅ Dedicated AI loan advisor (me — Rahul!)
+✅ Instant eligibility check for clients
+✅ Document checklist automatically
+✅ 100% digital — no paperwork
+✅ Real time case tracking
+✅ Dedicated relationship manager
+
+Ready to grow your income?
+👉 [Partner Registration Link]
+
+Any questions? I am here! 😊"
+
+QUALIFICATION CRITERIA — STRICT:
+
+AGE:
+- Maximum age at LAST EMI = 60 years (same for everyone — no exceptions)
+- Example: Age 45, tenure 20yr → age at end = 65 → DECLINE ❌
+- Example: Age 45, tenure 15yr → age at end = 60 → PROCEED ✅
+- Calculate: Current age + tenure requested = must be ≤ 60
+
+INCOME (All loans):
+- Above ₹25,000 → Green ✅ Proceed
+- ₹15,000 - ₹25,000 → Yellow ⚠️ Limited lenders
+- Below ₹15,000 → Decline ❌
+
+CIBIL:
+- PL/BL: Minimum 700. Below 700 → Decline ❌
+- HL/LAP/BT+TU: Minimum 650. 650-700 → Limited lenders ⚠️. Below 650 → Decline ❌
+- CIBIL report not mandatory — self declared acceptable
+- If 3+ enquiries in last 1 month for PL/BL → Decline ❌ (suggest wait 3-4 weeks)
+
+FOIR (Fixed Obligation to Income Ratio):
+- Maximum 50% of income can go to EMIs
+- Calculate: (Existing EMIs + New EMI) / Income × 100
+- Above 50% → Decline or reduce loan amount
+
+BOUNCES:
+- 0 bounces → Green ✅
+- 1-2 bounces → Yellow ⚠️ Limited lenders
+- 3+ bounces in last 6 months → Decline ❌
+
+SALARIED SPECIFIC:
+- Salary MUST be credited to bank account ✅
+- Cash salary → Decline ❌
+- Total work experience minimum 1 year ✅
+- Less than 1 year → Decline ❌
+- Current company less than 6 months → need offer letter + relieving letter
+- PF deduction preferred ✅
+- Loan amount: maximum 10-12x monthly income
+
+BUSINESS LOAN SPECIFIC:
+- Business vintage minimum 3 years ✅
+- Less than 3 years → very limited lenders
+- Less than 1 year → Decline ❌
+- Business bank account mandatory ✅
+- ITR filing minimum 1 year ✅
+- GST registration preferred ✅
+- CIBIL minimum 700 — below 700 → Decline ❌
+
+HOME LOAN SPECIFIC:
+- Salaried or Self Employed both eligible
+- Business vintage minimum 3 years for SE
+- Property: registered society preferred (MCGM/GP/SRA/MHADA/CHS)
+- LTV: maximum 75-80% of property value
+- Co-applicant recommended to increase eligibility
+- Fresh or BT+TU — ask which one
+
+LAP SPECIFIC:
+- CIBIL report preferred (not mandatory)
+- Property: residential or commercial
+- LTV: 50-70% of property value
+- Existing loan on property → ask outstanding, ROI, EMI
+- Co-applicant recommended
+- Fresh or BT+TU — ask which one
+- If overdue on unsecured loan → suggest LAP as better option
+
+CONSTRUCTION FINANCE:
+- No documents collected by Rahul
+- Collect project details only
+- Venkatesh handles personally
+- Closing: "Our Construction Finance specialist will personally connect with you very soon! 😊"
+
+OVERDUE HANDLING:
+- If overdue on unsecured loan (PL/BL) → suggest secured option (LAP)
+- Say: "Since you have an overdue on unsecured loan, LAP could be a better option if you have a property. Would you like to explore that?"
+
+CO-APPLICANT:
+- PL/BL: Not required ❌
+- HL/LAP/BT+TU/CF: Recommended ✅
+- Suggest co-applicant if income low or CIBIL low for HL/LAP
+- Co-applicant can be: Spouse, Father, Mother, Son, Daughter, Business Partner
+
+LOAN ELIGIBILITY CALCULATION:
+- PL/BL: 10-12x monthly income maximum
+- HL/LAP: 60x monthly income maximum
+- FOIR max 50%
+- If unrealistic amount — calculate and tell customer maximum eligible amount
+
+CONVERSATION FLOW — CUSTOMER:
+
+For ALL loans (except CF):
+Step 1: Warm greeting based on time
+Step 2: Understand loan requirement
+Step 2.5: Fresh loan or Balance Transfer?
+Step 3: Ask name
+Step 4: Ask age (to calculate tenure eligibility)
+Step 5: Ask employment — Salaried or Self Employed?
+Step 5.1: If Salaried — company name, total experience, years in current company, salary credited to bank?
+Step 5.2: If Self Employed — business type, vintage, GST registered?
+Step 6: Ask loan amount required
+Step 7: Ask monthly income
+Step 8: Ask approximate CIBIL — "Aapka approximate CIBIL score kya hai? Agar nahi pata toh PaisaBazaar app ya GPay app mein free mein check kar sakte hain!"
+Step 9: Ask existing EMIs — how many loans, which banks, monthly EMI amount
+Step 10: Ask cheque/ECS bounces in last 6 months
+Step 10.5: If PL/BL — ask credit enquiries in last 1 month
+Step 11: Ask city
+Step 11.5: If HL/LAP — ask property details (type, location, value, existing loan?)
+Step 11.6: If HL/LAP — ask co-applicant details (name, income)
+Step 12: QUALIFY based on all criteria
+Step 13: If ELIGIBLE — collect documents one by one
+Step 14: After minimum docs received — trigger case summary
+Step 15: Closing message
+
+For CONSTRUCTION FINANCE:
+Step 1: Warm greeting
+Step 2: Ask project details (location, type, cost, stage, approvals)
+Step 3: Ask name, company
+Step 4: Ask funding required
+Step 5: Closing — specialist will connect
+Step 6: Trigger case summary (no documents)
+
+DOCUMENT COLLECTION (after qualification — except CF):
+
+Rahul asks ONE document at a time:
+"[Name] your profile looks really strong! 😊
+To complete your file I just need a few documents.
+Let us start with your PAN Card — please take a clear photo and send it here. I will wait! 🙂"
+
+After each document received:
+- Analyze immediately
+- Give positive feedback
+- Ask for next document
+- Show progress
+
+MANDATORY DOCUMENTS per loan:
+PL: PAN + Aadhar + Bank Statement (6 months) + Salary Slip ✅
+BL: PAN + Aadhar + Bank Statement (12 months) + ITR ✅
+HL: PAN + Aadhar + Bank Statement (6 months) + Salary Slip / ITR ✅
+LAP: PAN + Aadhar + Bank Statement (6 months) + Salary Slip / ITR ✅
+BT+TU: Same as HL/LAP + loan account statement ✅
+CF: No documents from bot ✅
+
+MINIMUM to trigger case summary:
+- PAN + Aadhar + Bank Statement received → generate case
+- Remaining docs noted as pending ✅
+
+DOCUMENT VERIFICATION (Rahul checks each):
+- Bank Statement: Check period (need 6 months minimum), account holder name
+- If only 3 months: "I need 6 months statement. This covers only 3 months. Could you download from [month] onwards? 😊"
+- If password protected: "Your bank statement is password protected. Could you share the password? It will be kept confidential and used only for processing!"
+- PAN Card: Clear photo, name extracted
+- Aadhar: Both sides needed
+- Salary Slip: Latest month required. If old — ask for latest
+- ITR: Assessment year check. Minimum 1 year for BL, 3 years preferred
+- Udyam: Check if name matches bank account
+- Name mismatch: "I notice your Udyam name and bank account name are different. Lenders may question this. Do you have a bank account in exact business name?"
+
+DOCUMENT PROGRESS (show customer):
+"Your file status:
+✅ PAN Card
+✅ Aadhar Card
+✅ Bank Statement
+⏳ Salary Slip (pending)
+Just 1 more and your file is ready! 🎉"
+
+WRONG DOCUMENT DETECTION:
+- Selfie instead of PAN: "This looks like a photo! 😄 I need your PAN Card document. Please send the card photo!"
+- Unclear image: "This image is a bit blurry. Could you retake with better lighting? 😊"
+
+CUSTOMER HESITATION ABOUT SHARING DOCUMENTS:
+"I completely understand your concern! 😊
+VastMyWealth is a registered loan advisory firm.
+Your documents are used only for loan processing
+and stored completely securely.
+Many customers have trusted us and got loans processed successfully!
+Shall we continue? 🙂"
+
+CLOSING MESSAGE (after case summary triggered):
+For ALL loans (except CF):
+"Thank you [Name]! 😊
+Your file looks great!
+Our team will connect with you very soon.
+Please keep remaining documents ready if any."
+
+For CF:
+"Thank you [Name]! 😊
+Our Construction Finance specialist will personally connect with you very soon!"
+
+DECLINE CRITERIA:
+- Age at last EMI > 60 → Decline
+- Income < ₹15,000 → Decline
+- CIBIL < 700 for PL/BL → Decline (suggest LAP if property available)
+- CIBIL < 650 for HL/LAP → Decline
+- Work experience < 1 year (salaried) → Decline
+- Business vintage < 1 year → Decline
+- 3+ bounces in 6 months → Decline
+- 3+ credit enquiries in 1 month (PL/BL) → Decline (suggest wait)
+- Cash salary → Decline
+- No business bank account (BL) → Decline
+- FOIR > 50% → Decline or suggest reduce amount
+- Overdue on unsecured → suggest LAP
+
+POLITE DECLINE FORMAT:
+- Always thank first
+- Give specific clear reason
+- Give constructive advice
+- NEVER give phone number
+- NEVER encourage to call
+- Say: "When your profile meets the criteria, we will be delighted to assist you! 😊"
+
+CONVERSATION PRODUCTIVITY:
+- If customer asks interest rates — give brief answer then redirect: "Exact rate depends on your profile. Let me check your eligibility first!"
+- If customer asks unrelated questions — redirect politely to loan assistance
+- Always be warm — never rude or abrupt
+- Goal: qualify fully, collect documents, trigger case summary
+
+STRICT RULES — NEVER BREAK:
+1. NEVER guarantee approval
+2. NEVER promise exact rates
+3. NEVER say easily, guaranteed, 100% sure, pakka, definitely
+4. NEVER promise exact commission amounts
+5. NEVER give phone number unless customer specifically asks
+6. NEVER reveal you are AI/bot
+7. Always say final decision by lender
+8. NEVER mention Banking Portal link
+9. NEVER send any template links
+10. Ask ONE question at a time
+
+LANGUAGE RULES:
+- Detect customer language — respond in same language
+- English first, then adapt to customer
+- Hinglish if customer uses mix
+- ALWAYS use Aap/Aapka — NEVER Tum/Tumhara
+- Formal respectful tone
+- No bold formatting with asterisks
+- Max 3 lines per message
+- Natural WhatsApp chat style
+
+RESPONSE FORMAT — Always respond in this exact JSON only, nothing else:
+{
+  "message": "your response to customer",
+  "loanType": "detected loan type or null",
+  "customerName": "customer name if mentioned or null",
+  "customerAge": "age if mentioned or null",
+  "loanAmount": "loan amount if mentioned or null",
+  "city": "city if mentioned or null",
+  "employmentType": "Salaried or Self-Employed if mentioned or null",
+  "monthlyIncome": "income if mentioned or null",
+  "cibilScore": "CIBIL if mentioned or null",
+  "existingEMI": "existing EMI amount if mentioned or null",
+  "bounces": "bounce count if mentioned or null",
+  "mediaRequested": "which document Rahul is asking for currently or null",
+  "qualificationStatus": "ELIGIBLE or DECLINED or IN_PROGRESS or null",
+  "caseReady": true or false,
+  "partnerMode": true or false,
+  "sendCaseSummary": true or false
+}
+
+Set sendCaseSummary=true ONLY when:
+- Minimum documents received (PAN + Aadhar + Bank Statement) AND
+- All qualification questions answered AND
+- Customer is eligible
+
+Set qualificationStatus=DECLINED when any decline criteria is met
+Set partnerMode=true when customer is verified approved partner`;
 
 // ============================================================
 // DETECT LOAN TYPE FROM KEYWORD
@@ -287,56 +392,201 @@ function detectLoanType(text) {
   if (t.includes("PROPERTY")     || t === "LAP" || t.includes("#LAP") ||
       t.includes("AGAINST")      || t.includes("MORTG"))               return "Loan Against Property";
   if (t.includes("PERSONAL")     || t === "PL"  || t.includes("#PL"))  return "Personal Loan";
-  if (t === "LOANS" || t === "LOAN") return "Personal Loan";
+  if (t === "LOANS" || t === "LOAN")                                    return "Personal Loan";
   if (t.includes("PARTNER")      || t.includes("EARN") ||
       t.includes("JOIN")         || t.includes("AGENT") ||
       t.includes("CHANNEL"))                                            return "Partner Inquiry";
   if (t.includes("CONSTRUCTION") || t.includes("BUILDER"))             return "Construction Finance";
   if (t.includes("BALANCE")      || t.includes("TRANSFER") ||
       t.includes("TOP UP")       || t.includes("TOPUP"))               return "Balance Transfer + Top Up";
+  if (t === "PARTNER LOGIN")                                            return "Partner Login";
   return null;
 }
 
 // ============================================================
-// SEND CORRECT TEMPLATE
+// GET IST TIME GREETING
 // ============================================================
-async function sendLoanTemplate(to, loanType) {
-  const lt = (loanType || "").toUpperCase();
-  if (lt.includes("HOME") || lt === "HL") {
-    return await sendTemplateWithImage(to, "welcome_hl",
-      "https://drive.google.com/uc?export=download&id=151p69azxUf_tcJH9uwueGtigbyqMscFk");
-  } else if (lt.includes("LAP") || lt.includes("PROPERTY") || lt === "BTTU" ||
-             lt.includes("BALANCE") || lt.includes("TRANSFER") || lt.includes("TOP")) {
-    return await sendTemplateWithImage(to, "welcome_lap",
-      "https://drive.google.com/uc?export=download&id=1WUkhuqRbtAm5hHk3dnZ8JLzYHz4E2AHq");
-  } else if (lt.includes("PERSONAL") || lt === "PL" || lt.includes("BUSINESS") || lt === "BL") {
-    return await sendTemplateWithImage(to, "welcome_unsecured",
-      "https://drive.google.com/uc?export=download&id=1llb-yxEyzSR1JVEqdM4TmI7_ICDOFSrD");
-  } else if (lt.includes("PARTNER") || lt.includes("JOIN") || lt.includes("EARN") || lt.includes("CHANNEL")) {
-    return await sendTemplateWithImage(to, "partner_recruitment",
-      "https://drive.google.com/uc?export=download&id=18WCgSkS9sLmeI8YNgaLPKbBw-QJ90xPv");
-  } else if (lt.includes("CONSTRUCTION") || lt.includes("BUILDER") || lt === "CF") {
-    return await sendTemplateWithImage(to, "construction_finance",
-      "https://drive.google.com/uc?export=download&id=1la4AWXmwlpwqXWC9cZsvUnwxgyq92Bxz");
-  } else {
-    return await sendTemplate(to, WELCOME_TEMPLATE);
+function getTimeGreeting() {
+  const ist  = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+  const hour = ist.getHours();
+  if (hour >= 6  && hour < 12) return "Good Morning! 😊";
+  if (hour >= 12 && hour < 17) return "Good Afternoon! ☀️";
+  if (hour >= 17 && hour < 21) return "Good Evening! 🌆";
+  return "Hello! 😊";
+}
+
+// ============================================================
+// DOWNLOAD MEDIA FROM WHATSAPP
+// ============================================================
+async function downloadMedia(mediaId) {
+  try {
+    // Get media URL
+    const urlRes = await fetch(
+      `https://graph.facebook.com/v18.0/${mediaId}`,
+      { headers: { "Authorization": "Bearer " + process.env.WHATSAPP_TOKEN } }
+    );
+    const urlData = await urlRes.json();
+    if (!urlData.url) return null;
+
+    // Download media
+    const mediaRes = await fetch(urlData.url, {
+      headers: { "Authorization": "Bearer " + process.env.WHATSAPP_TOKEN }
+    });
+    const buffer   = await mediaRes.buffer();
+    const mimeType = urlData.mime_type || "image/jpeg";
+    const b64      = buffer.toString("base64");
+
+    return { b64, mimeType, size: buffer.length };
+  } catch(e) {
+    console.error("downloadMedia error:", e.message);
+    return null;
   }
 }
 
 // ============================================================
-// CHECK IF TEMPLATE ALREADY SENT
+// VERIFY DOCUMENT VIA CLAUDE
 // ============================================================
-async function isTemplateAlreadySent(mobile) {
+async function verifyDocument(b64, mimeType, docType, conversationContext) {
   try {
-    if (!process.env.APPS_SCRIPT_URL) return false;
-    const url  = process.env.APPS_SCRIPT_URL + "?mobile=" + encodeURIComponent(mobile);
-    const res  = await fetch(url);
+    const isPDF = mimeType === "application/pdf";
+    const content = [];
+
+    if (isPDF) {
+      content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } });
+    } else {
+      content.push({ type: "image", source: { type: "base64", media_type: mimeType, data: b64 } });
+    }
+
+    content.push({ type: "text", text: `
+You are verifying a ${docType} document for a loan application at VastMyWealth Advisory.
+
+Context: ${conversationContext}
+
+Please verify this document and respond in JSON only:
+{
+  "valid": true or false,
+  "docType": "what document this actually is",
+  "name": "name on document if visible",
+  "issue": "specific issue if any or null",
+  "feedback": "friendly message to send customer (max 2 lines)",
+  "extractedData": {
+    "bankPeriod": "from month-year to month-year if bank statement",
+    "monthsCovered": number if bank statement,
+    "passwordProtected": true or false if PDF,
+    "accountHolderName": "name on bank account if visible",
+    "salaryAmount": "salary amount if salary slip",
+    "companyName": "company if salary slip",
+    "itrYear": "assessment year if ITR",
+    "udyamName": "business name if Udyam",
+    "panName": "name on PAN if PAN card",
+    "aadharName": "name on Aadhar if Aadhar"
+  }
+}` });
+
+    const res = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 500,
+        messages: [{ role: "user", content }]
+      })
+    });
+
     const data = await res.json();
-    console.log("Template check for " + mobile + ": filled=" + data.filled);
-    return data.filled === true;
-  } catch (err) {
-    console.error("isTemplateAlreadySent error:", err.message);
-    return false;
+    if (data.content && data.content[0]) {
+      const clean = data.content[0].text.replace(/```json|```/g, "").trim();
+      return JSON.parse(clean);
+    }
+    return null;
+  } catch(e) {
+    console.error("verifyDocument error:", e.message);
+    return null;
+  }
+}
+
+// ============================================================
+// TRIGGER CASE SUMMARY
+// ============================================================
+async function triggerCaseSummary(conv, from) {
+  try {
+    console.log("Triggering case summary for: " + from);
+
+    const payload = {
+      action          : "case-summary",
+      mobile          : from,
+      name            : conv.name            || "",
+      age             : conv.customerAge     || "",
+      loanType        : conv.loanType        || "",
+      loanAmount      : conv.loanAmount      || "",
+      city            : conv.city            || "",
+      employmentType  : conv.employmentType  || "",
+      monthlyIncome   : conv.monthlyIncome   || "",
+      cibilScore      : conv.cibilScore      || "",
+      existingEMI     : conv.existingEMI     || "",
+      bounces         : conv.bounces         || "",
+      companyName     : conv.companyName     || "",
+      workExperience  : conv.workExperience  || "",
+      businessVintage : conv.businessVintage || "",
+      propertyDetails : conv.propertyDetails || "",
+      coApplicant     : conv.coApplicant     || "",
+      partnerCode     : conv.partnerCode     || "",
+      isPartnerCase   : conv.partnerMode     || false,
+      documents       : conv.documents       || {},
+      conversationSummary: conv.messages.slice(-10).map(m => m.role + ": " + m.content).join("\n")
+    };
+
+    // Send to AI Analyzer for case summary + email
+    fetch(RENDER_URL + "/case-summary", {
+      method : "POST",
+      headers: { "Content-Type": "application/json" },
+      body   : JSON.stringify(payload)
+    }).catch(e => console.error("triggerCaseSummary error:", e.message));
+
+    console.log("Case summary triggered for: " + from);
+  } catch(e) {
+    console.error("triggerCaseSummary error:", e.message);
+  }
+}
+
+// ============================================================
+// CHECK PARTNER STATUS
+// ============================================================
+async function checkPartnerStatus(mobile) {
+  try {
+    const clean = mobile.replace(/\D/g, "").slice(-10);
+    const url   = process.env.APPS_SCRIPT_URL +
+      "?action=checkPartner&mobile=" + encodeURIComponent(clean);
+    const res   = await fetch(url);
+    const data  = await res.json();
+    return data; // { found: bool, approved: bool, name: string, code: string }
+  } catch(e) {
+    console.error("checkPartnerStatus error:", e.message);
+    return { found: false, approved: false };
+  }
+}
+
+// ============================================================
+// SAVE LEAD TO WA LEADS TAB
+// ============================================================
+async function saveLeadToSheet(mobile, name, loanType, city, status) {
+  try {
+    if (!process.env.APPS_SCRIPT_URL) return;
+    const url = process.env.APPS_SCRIPT_URL +
+      "?action=storeMessage" +
+      "&mobile="   + encodeURIComponent(mobile) +
+      "&message="  + encodeURIComponent(status || "Bot qualified lead") +
+      "&name="     + encodeURIComponent(name     || "") +
+      "&loanType=" + encodeURIComponent(loanType || "") +
+      "&city="     + encodeURIComponent(city     || "");
+    await fetch(url);
+    console.log("Lead saved: " + mobile);
+  } catch(e) {
+    console.error("saveLeadToSheet error:", e.message);
   }
 }
 
@@ -351,30 +601,23 @@ async function storeInAppsScript(mobile, message) {
       "&mobile="  + encodeURIComponent(mobile) +
       "&message=" + encodeURIComponent(message || "");
     await fetch(url);
-    console.log("Stored:", mobile);
-  } catch (err) {
-    console.error("storeInAppsScript error:", err.message);
+  } catch(e) {
+    console.error("storeInAppsScript error:", e.message);
   }
 }
 
 // ============================================================
-// SAVE LEAD TO WA LEADS TAB
+// SAVE CONVERSATION
 // ============================================================
-async function saveLeadToSheet(mobile, name, loanType, city) {
+function saveConversation(mobile, role, message) {
   try {
-    if (!process.env.APPS_SCRIPT_URL) return;
     const url = process.env.APPS_SCRIPT_URL +
-      "?action=storeMessage" +
-      "&mobile="   + encodeURIComponent(mobile) +
-      "&message="  + encodeURIComponent("Bot qualified lead") +
-      "&name="     + encodeURIComponent(name     || "") +
-      "&loanType=" + encodeURIComponent(loanType || "") +
-      "&city="     + encodeURIComponent(city     || "");
-    await fetch(url);
-    console.log("Lead saved: " + mobile + " | " + name + " | " + loanType);
-  } catch(e) {
-    console.error("saveLeadToSheet error:", e.message);
-  }
+      "?action=saveConversation" +
+      "&mobile="  + encodeURIComponent(mobile) +
+      "&role="    + encodeURIComponent(role) +
+      "&message=" + encodeURIComponent((message || "").substring(0, 500));
+    fetch(url).catch(function() {});
+  } catch(e) {}
 }
 
 // ============================================================
@@ -394,7 +637,7 @@ async function sendTextMessage(to, text) {
           messaging_product: "whatsapp",
           to               : to,
           type             : "text",
-          text             : {body: text}
+          text             : { body: text }
         })
       }
     );
@@ -407,83 +650,28 @@ async function sendTextMessage(to, text) {
 }
 
 // ============================================================
-// SEND TEMPLATE (no image)
+// CALL CLAUDE BOT
 // ============================================================
-async function sendTemplate(to, templateName) {
-  try {
-    const res = await fetch(
-      "https://graph.facebook.com/v18.0/" + process.env.PHONE_NUMBER_ID + "/messages",
-      {
-        method : "POST",
-        headers: {
-          "Authorization": "Bearer " + process.env.WHATSAPP_TOKEN,
-          "Content-Type" : "application/json"
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to               : to,
-          type             : "template",
-          template         : {name: templateName, language: {code: "en"}, components: []}
-        })
-      }
-    );
-    const data = await res.json();
-    if (data.messages) { console.log("Template sent: " + templateName + " to " + to); return true; }
-    console.error("Template failed:", JSON.stringify(data));
-    return false;
-  } catch (err) {
-    console.error("sendTemplate error:", err.message);
-    return false;
-  }
-}
-
-// ============================================================
-// SEND TEMPLATE WITH IMAGE
-// ============================================================
-async function sendTemplateWithImage(to, templateName, imageUrl) {
-  try {
-    const res = await fetch(
-      "https://graph.facebook.com/v18.0/" + process.env.PHONE_NUMBER_ID + "/messages",
-      {
-        method : "POST",
-        headers: {
-          "Content-Type" : "application/json",
-          "Authorization": "Bearer " + process.env.WHATSAPP_TOKEN
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to               : to,
-          type             : "template",
-          template         : {
-            name      : templateName,
-            language  : {code: "en"},
-            components: [{type:"header", parameters:[{type:"image", image:{link: imageUrl}}]}]
-          }
-        })
-      }
-    );
-    const result = await res.json();
-    if (result.messages) { console.log("Template sent: " + templateName + " to " + to); return true; }
-    console.log("Template failed: " + JSON.stringify(result));
-    return false;
-  } catch(e) {
-    console.error("sendTemplateWithImage error:", e.message);
-    return false;
-  }
-}
-
-// ============================================================
-// CALL CLAUDE AI BOT
-// ============================================================
-async function callClaudeBot(userMessage, history) {
+async function callClaudeBot(userMessage, history, mediaContent) {
   try {
     const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY;
-    if (!ANTHROPIC_KEY) { console.error("ANTHROPIC_KEY not set!"); return null; }
+    if (!ANTHROPIC_KEY) return null;
 
-    const messages = history.concat([{role:"user", content: userMessage}]);
+    // Build user message content
+    let userContent;
+    if (mediaContent) {
+      userContent = [
+        ...mediaContent,
+        { type: "text", text: userMessage || "I have shared the document" }
+      ];
+    } else {
+      userContent = userMessage;
+    }
+
+    const messages = history.concat([{ role: "user", content: userContent }]);
 
     const controller = new AbortController();
-    const timeout    = setTimeout(function() { controller.abort(); }, 15000);
+    const timeout    = setTimeout(() => controller.abort(), 20000);
 
     const res = await fetch(ANTHROPIC_URL, {
       method : "POST",
@@ -492,11 +680,10 @@ async function callClaudeBot(userMessage, history) {
         "x-api-key"        : ANTHROPIC_KEY,
         "anthropic-version": "2023-06-01"
       },
-      body  : JSON.stringify({
+      body: JSON.stringify({
         model     : "claude-haiku-4-5",
-        max_tokens: 400,
-        system: BOT_SYSTEM_PROMPT,
-
+        max_tokens: 500,
+        system    : BOT_SYSTEM_PROMPT,
         messages  : messages
       }),
       signal: controller.signal
@@ -512,20 +699,11 @@ async function callClaudeBot(userMessage, history) {
         const parsed = JSON.parse(clean);
         parsed.message = (parsed.message || "")
           .replace(/\\n/g, "\n")
-          .replace(/\*\*/g, "*")
+          .replace(/\*\*/g, "")
           .replace(/#{1,6}\s/g, "");
         return parsed;
       } catch(e) {
-        const msgMatch = text.match(/"message"\s*:\s*"([\s\S]*?)(?<!\\)"/);
-        if (msgMatch) {
-          return {
-            message     : msgMatch[1].replace(/\\n/g, "\n").replace(/\*\*/g, "*"),
-            loanType    : null,
-            sendTemplate: false,
-            templateType: null
-          };
-        }
-        return {message: text.split("{")[0].trim(), loanType:null, sendTemplate:false, templateType:null};
+        return { message: text.split("{")[0].trim(), sendCaseSummary: false };
       }
     }
     return null;
@@ -536,21 +714,22 @@ async function callClaudeBot(userMessage, history) {
 }
 
 // ============================================================
-// SAVE CONVERSATION (async)
+// CHECK IF ALREADY PROCESSED
 // ============================================================
-function saveConversation(mobile, role, message) {
+async function isTemplateAlreadySent(mobile) {
   try {
-    const url = process.env.APPS_SCRIPT_URL +
-      "?action=saveConversation" +
-      "&mobile="  + encodeURIComponent(mobile) +
-      "&role="    + encodeURIComponent(role) +
-      "&message=" + encodeURIComponent((message || "").substring(0, 500));
-    fetch(url).catch(function() {});
-  } catch(e) {}
+    if (!process.env.APPS_SCRIPT_URL) return false;
+    const url  = process.env.APPS_SCRIPT_URL + "?mobile=" + encodeURIComponent(mobile);
+    const res  = await fetch(url);
+    const data = await res.json();
+    return data.filled === true;
+  } catch(e) {
+    return false;
+  }
 }
 
 // ============================================================
-// 1. WEBHOOK VERIFICATION
+// WEBHOOK VERIFICATION
 // ============================================================
 app.get("/webhook", function(req, res) {
   if (
@@ -564,171 +743,272 @@ app.get("/webhook", function(req, res) {
 });
 
 // ============================================================
-// 2. RECEIVE INCOMING WHATSAPP MESSAGE
+// RECEIVE INCOMING WHATSAPP MESSAGE
 // ============================================================
 app.post("/webhook", async function(req, res) {
   res.sendStatus(200);
 
   try {
-    const entry   = req.body.entry && req.body.entry[0];
-    const changes = entry && entry.changes && entry.changes[0];
-    const value   = changes && changes.value;
+    const entry   = req.body.entry   && req.body.entry[0];
+    const changes = entry            && entry.changes && entry.changes[0];
+    const value   = changes          && changes.value;
 
     if (value && value.statuses) return;
 
     const message = value && value.messages && value.messages[0];
     if (!message) return;
 
-    if (message.type !== "text" && message.type !== "button" && message.type !== "interactive") {
-      console.log("Non-text message ignored:", message.type);
+    const from      = message.from;
+    const msgType   = message.type;
+    let   text      = "";
+    let   mediaData = null;
+
+    // ── HANDLE TEXT ──────────────────────────────────────────
+    if (msgType === "text") {
+      text = (message.text && message.text.body) || "";
+    }
+    // ── HANDLE BUTTON/INTERACTIVE ────────────────────────────
+    else if (msgType === "button") {
+      text = (message.button && (message.button.text || message.button.payload)) || "Chat";
+    }
+    else if (msgType === "interactive") {
+      text = (message.interactive && message.interactive.button_reply &&
+              message.interactive.button_reply.title) ||
+             (message.interactive && message.interactive.list_reply &&
+              message.interactive.list_reply.title) || "Chat";
+    }
+    // ── HANDLE IMAGE ─────────────────────────────────────────
+    else if (msgType === "image") {
+      const mediaId  = message.image && message.image.id;
+      const mimeType = (message.image && message.image.mime_type) || "image/jpeg";
+      if (mediaId) {
+        console.log("Image received from: " + from);
+        await sendTextMessage(from, "Received! Analyzing... ⏳\nGive me a moment 😊");
+        const downloaded = await downloadMedia(mediaId);
+        if (downloaded) {
+          mediaData = [{
+            type  : "image",
+            source: { type: "base64", media_type: downloaded.mimeType, data: downloaded.b64 }
+          }];
+          text = "I have shared a document photo";
+        } else {
+          await sendTextMessage(from, "I could not receive your document. Could you try sending again? 😊");
+          return;
+        }
+      }
+    }
+    // ── HANDLE DOCUMENT (PDF) ────────────────────────────────
+    else if (msgType === "document") {
+      const mediaId  = message.document && message.document.id;
+      const mimeType = (message.document && message.document.mime_type) || "application/pdf";
+      if (mediaId) {
+        console.log("Document received from: " + from);
+        await sendTextMessage(from, "Received! Analyzing... ⏳\nGive me a moment 😊");
+        const downloaded = await downloadMedia(mediaId);
+        if (downloaded) {
+          mediaData = [{
+            type  : "document",
+            source: { type: "base64", media_type: "application/pdf", data: downloaded.b64 }
+          }];
+          text = "I have shared a PDF document";
+
+          // Store document in conversation for case summary
+          if (!conversations[from]) conversations[from] = { messages: [], msgCount: 0, documents: {} };
+          const conv = conversations[from];
+          const docKey = conv.mediaRequested || "document";
+          conv.documents[docKey] = "PDF:" + downloaded.b64;
+          console.log("PDF stored: " + docKey);
+        } else {
+          await sendTextMessage(from, "I could not receive your document. Could you try sending again? 😊");
+          return;
+        }
+      }
+    }
+    // ── IGNORE OTHER TYPES ───────────────────────────────────
+    else {
+      console.log("Unsupported message type ignored: " + msgType);
       return;
     }
 
-    const from = message.from;
-    let text   = "";
-
-    if (message.type === "text") {
-      text = (message.text && message.text.body) || "";
-    } else if (message.type === "button") {
-      text = (message.button && (message.button.text || message.button.payload)) || "Chat";
-    } else if (message.type === "interactive") {
-      text = (message.interactive && message.interactive.button_reply && message.interactive.button_reply.title) ||
-             (message.interactive && message.interactive.list_reply && message.interactive.list_reply.title) || "Chat";
-    }
-
-    // Deduplicate messages
+    // Deduplicate
     const msgId = message.id;
     if (!conversations._processedIds) conversations._processedIds = {};
-    if (conversations._processedIds[msgId]) {
-      console.log("Duplicate message ignored: " + msgId);
-      return;
-    }
+    if (conversations._processedIds[msgId]) return;
     conversations._processedIds[msgId] = true;
     const ids = Object.keys(conversations._processedIds);
-    if (ids.length > 100) delete conversations._processedIds[ids[0]];
+    if (ids.length > 200) delete conversations._processedIds[ids[0]];
 
-    console.log("Incoming from " + from + ": " + text);
+    console.log("Incoming from " + from + ": " + text.substring(0, 50));
 
-    // STEP 1: Store message
+    // Store message
     await storeInAppsScript(from, text);
 
-    // STEP 2: Check if template already sent
-    const alreadySent = await isTemplateAlreadySent(from);
-
-    // If template sent BUT customer clicked Chat button — reactivate bot
-    const isChatButton = text === "Chat with us" || text === "Chat" ||
-                         text.toLowerCase().includes("chat with");
-
-    if (alreadySent && !isChatButton) {
-      console.log("Template already sent — bot inactive: " + from);
+    // Check if already processed (case summary sent)
+    const conv = conversations[from] || {};
+    if (conv.caseSummarySent) {
+      console.log("Case already sent — bot inactive: " + from);
       return;
     }
 
-    // STEP 3: Detect loan type from keyword
-    const detectedLoanType = detectLoanType(text);
-    console.log("Loan type: " + (detectedLoanType || "Unknown — AI bot"));
-
-    // STEP 4: Short keyword + no active session = direct template
-    const hasActiveSession = conversations[from] && conversations[from].msgCount > 0;
-    const isShortKeyword   = text.trim().split(" ").length <= 3;
-
-    if (detectedLoanType && isShortKeyword && !hasActiveSession) {
-  if (detectedLoanType === "Construction Finance") {
-    console.log("CF — routing to bot: " + from);
-  } else {
-    console.log("Short keyword — direct template: " + from);
-    await sendLoanTemplate(from, detectedLoanType);
-    return;
-  }
-}
-
-
-    // STEP 5: AI Bot handles
-    console.log("AI Bot for " + from);
-
+    // Initialize conversation
     if (!conversations[from]) {
       conversations[from] = {
-        messages    : [],
-        msgCount    : 0,
-        loanType    : null,
-        name        : null,
-        city        : null,
-        templateSent: false
+        messages        : [],
+        msgCount        : 0,
+        loanType        : null,
+        name            : null,
+        customerAge     : null,
+        city            : null,
+        employmentType  : null,
+        monthlyIncome   : null,
+        cibilScore      : null,
+        existingEMI     : null,
+        bounces         : null,
+        loanAmount      : null,
+        companyName     : null,
+        workExperience  : null,
+        businessVintage : null,
+        propertyDetails : null,
+        coApplicant     : null,
+        partnerCode     : null,
+        partnerMode     : false,
+        documents       : {},
+        mediaRequested  : null,
+        caseSummarySent : false,
+        greeting        : getTimeGreeting()
       };
     }
 
-    const conv = conversations[from];
-    if (conv.templateSent) return;
-    conv.msgCount++;
+    const session = conversations[from];
+    session.msgCount++;
 
-    // Call Claude
-    const botResponse = await callClaudeBot(text, conv.messages);
+    // ── PARTNER LOGIN ICEBREAKER ─────────────────────────────
+    if (text.toUpperCase() === "PARTNER LOGIN") {
+      await sendTextMessage(from, "Welcome to VastMyWealth! 😊\nPlease share your registered mobile number to login as a partner.");
+      return;
+    }
+
+    // ── CHECK IF PARTNER MOBILE VERIFICATION ─────────────────
+    if (session.awaitingPartnerMobile) {
+      const partnerMobile = text.replace(/\D/g, "").slice(-10);
+      if (partnerMobile.length === 10) {
+        session.awaitingPartnerMobile = false;
+        const partnerStatus = await checkPartnerStatus(partnerMobile);
+        if (partnerStatus.approved) {
+          session.partnerMode = true;
+          session.partnerCode = partnerStatus.code;
+          session.partnerName = partnerStatus.name;
+          await sendTextMessage(from, `Welcome back ${partnerStatus.name}! 😊\nLet's check your client's eligibility.\nPlease share the client's details — start with their loan requirement!`);
+        } else if (partnerStatus.found) {
+          await sendTextMessage(from, "Your registration is under review. Venkatesh will approve shortly! We will notify you. 😊");
+        } else {
+          // Registration pitch
+          await sendTextMessage(from, `Hi! Welcome to VastMyWealth Advisory! 😊
+
+I see you are not registered as a partner yet.
+
+Here is why top professionals partner with us:
+
+💰 EARN WITH US:
+✅ Attractive commission on every disbursement
+✅ Multiple loan products — more earning opportunities
+
+🚀 WHAT YOU GET:
+✅ Instant eligibility check for clients
+✅ Document checklist automatically
+✅ 100% digital — no paperwork
+✅ Dedicated relationship manager
+
+Ready to grow your income?
+Please register here: https://forms.gle/LWN949M1k9khsUrGA`);
+        }
+        return;
+      }
+    }
+
+    // ── AI BOT HANDLES ───────────────────────────────────────
+    const botResponse = await callClaudeBot(text, session.messages, mediaData);
 
     if (!botResponse) {
-      await sendTextMessage(from, "Hi! I am Your Chat Support. How can I help you?");
+      await sendTextMessage(from, `${session.greeting} I am Rahul from VastMyWealth Advisory! How can I help you today?`);
       return;
     }
 
-    // Update history
-    conv.messages.push({role:"user",      content: text});
-    conv.messages.push({role:"assistant", content: JSON.stringify(botResponse)});
-    if (conv.messages.length > 8) conv.messages = conv.messages.slice(-8);
+    // Update conversation state
+    session.messages.push({ role: "user",      content: text });
+    session.messages.push({ role: "assistant",  content: JSON.stringify(botResponse) });
+    if (session.messages.length > 12) session.messages = session.messages.slice(-12);
 
-    if (botResponse.customerName) conv.name     = botResponse.customerName;
-    if (botResponse.loanType)     conv.loanType = botResponse.loanType;
-    if (botResponse.city)         conv.city     = botResponse.city;
+    // Extract data from bot response
+    if (botResponse.customerName)    session.name            = botResponse.customerName;
+    if (botResponse.customerAge)     session.customerAge     = botResponse.customerAge;
+    if (botResponse.loanType)        session.loanType        = botResponse.loanType;
+    if (botResponse.loanAmount)      session.loanAmount      = botResponse.loanAmount;
+    if (botResponse.city)            session.city            = botResponse.city;
+    if (botResponse.employmentType)  session.employmentType  = botResponse.employmentType;
+    if (botResponse.monthlyIncome)   session.monthlyIncome   = botResponse.monthlyIncome;
+    if (botResponse.cibilScore)      session.cibilScore      = botResponse.cibilScore;
+    if (botResponse.existingEMI)     session.existingEMI     = botResponse.existingEMI;
+    if (botResponse.bounces)         session.bounces         = botResponse.bounces;
+    if (botResponse.mediaRequested)  session.mediaRequested  = botResponse.mediaRequested;
 
-    // Save conversation async
+    // Save conversation
     saveConversation(from, "customer", text);
-    saveConversation(from, "bot",      botResponse.message);
+    saveConversation(from, "bot", botResponse.message);
 
     // Send reply
-    await sendTextMessage(from, botResponse.message);
+    if (botResponse.message) {
+      await sendTextMessage(from, botResponse.message);
+    }
 
-    // Send template if bot decided
-    if (botResponse.sendTemplate && botResponse.templateType && !conv.templateSent) {
-      conv.templateSent = true;
-      console.log("Bot sending template: " + botResponse.templateType + " to " + from);
+    // ── TRIGGER CASE SUMMARY ─────────────────────────────────
+    if (botResponse.sendCaseSummary && !session.caseSummarySent) {
+      session.caseSummarySent = true;
+      console.log("Case summary triggered for: " + from);
+
       // Save lead to WA Leads
-      await saveLeadToSheet(from, conv.name, conv.loanType || botResponse.templateType, conv.city);
-      await new Promise(function(r) { setTimeout(r, 1500); });
-      await sendLoanTemplate(from, botResponse.templateType);
+      await saveLeadToSheet(from, session.name, session.loanType, session.city, "Case Ready");
+
+      // Trigger case summary generation
+      await triggerCaseSummary(session, from);
+
+      // Send closing message
+      await new Promise(r => setTimeout(r, 1500));
+      const closingMsg = session.loanType && session.loanType.includes("Construction")
+        ? `Thank you ${session.name || ""}! 😊\nOur Construction Finance specialist will personally connect with you very soon!`
+        : `Thank you ${session.name || ""}! 😊\nYour file looks great!\nOur team will connect with you very soon.`;
+      await sendTextMessage(from, closingMsg);
       return;
     }
 
-    // Force after 7 messages
-    if (conv.msgCount >= 7 && !conv.templateSent) {
-      conv.templateSent = true;
-      console.log("7 messages — forcing template for " + from);
-      const forcedType = conv.loanType || "Personal Loan";
-      await sendTextMessage(from, "Please complete the application form in the next message. Our team will review and connect your application to the best lender!");
-      // Save lead to WA Leads
-      await saveLeadToSheet(from, conv.name, forcedType, conv.city);
-      await new Promise(function(r) { setTimeout(r, 1500); });
-      await sendLoanTemplate(from, forcedType);
+    // ── HANDLE DECLINED CASE ────────────────────────────────
+    if (botResponse.qualificationStatus === "DECLINED") {
+      session.caseSummarySent = true; // Stop further processing
+      await saveLeadToSheet(from, session.name, session.loanType, session.city, "Declined");
+      return;
     }
 
-  } catch (err) {
+  } catch(err) {
     console.error("Webhook error:", err.message);
   }
 });
 
 // ============================================================
-// 3. HEALTH CHECK
+// HEALTH CHECK
 // ============================================================
 app.get("/", function(req, res) {
   res.json({
-    status : "VastMyWealth Relay v5 Running",
-    version: "v5",
+    status : "VastMyWealth Relay v6 — Rahul Active",
+    version: "v6",
     time   : new Date().toISOString()
   });
 });
 
 // ============================================================
-// 4. START SERVER
+// START SERVER
 // ============================================================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, function() {
-  console.log("VastMyWealth Relay v5 running on port " + PORT);
+  console.log("🚀 VastMyWealth Relay v6 — Rahul running on port " + PORT);
 });
 
