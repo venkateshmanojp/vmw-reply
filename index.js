@@ -271,7 +271,16 @@ When customer gives preferred time:
 "Perfect! Manoj is available on [date] at [time].
 Callback confirmed! 📅
 
-Please keep your phone available at that time.”
+Please keep your phone available at that time."
+
+IMPORTANT — Date conversion rules:
+- NEVER store "Tomorrow" — convert to actual date e.g. "11 May 2026"
+- NEVER store "Monday" — convert to actual date
+- NEVER store "Day after tomorrow" — convert to actual date
+- Always store callbackDate as: "11 May 2026" format
+- Always store callbackTime as: "3:00 PM" format
+- Today's date reference: use current IST date
+
 
 Your callback is confirmed! ✅"
 
