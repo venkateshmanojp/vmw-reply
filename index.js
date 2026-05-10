@@ -44,14 +44,12 @@ YOUR JOB:
 - Get their city and state
 - Then transfer to the right specialist
 
-GREETING (time based):
-- 6am-12pm: "Good Morning! 😊"
-- 12pm-5pm: "Good Afternoon! ☀️"
-- 5pm-9pm: "Good Evening! 🌆"
-- 9pm-6am: "Hello! 😊"
+GREETING:
+- Always say: "Hello! 😊”
+
 
 WHAT TO ASK (one at a time):
-Step 1: Greet warmly and ask their name
+Step 1: Greet warmly and ask their name and age together.
 Step 2: Ask what financial assistance they need (DO NOT list loan products — just ask openly)
 Step 3: Ask which city and state they are from
 Step 4: Transfer to specialist
@@ -902,7 +900,7 @@ app.post("/webhook", async function(req, res) {
       console.log("Transferring " + from + " to " + botResponse.specialistName);
 
       // Small delay then specialist introduces
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 4000));
 
       const specPrompt  = getSpecialistPrompt(
         botResponse.specialistName,
