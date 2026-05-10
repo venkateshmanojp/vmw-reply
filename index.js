@@ -214,17 +214,20 @@ CUSTOMER CONTEXT (already collected by Priya):
 - Location: ${cityState}
 
 OPENING MESSAGE (first message as specialist):
-"Hi ${customerName || "there"}! 😊
+OPENING MESSAGE (first message as specialist):
+"Hi ${customerName || "there"}! 😊 This is ${specialistName} here.
 
-This is ${specialistName} here — ${spec.title} at VastMyWealth.
+I can see you need ${loanType || "a loan"} in ${cityState} — let me help you with that!
 
-How are you doing today?
+Just a few quick questions to find you the best deal."
 
-Give me a moment — let me go through your requirement... 🔄
-
-Ok ${customerName || ""}! I can see you are looking for ${loanType || "a loan"} in ${cityState}.
-
-${lt.includes("CONSTRUCTION") ? "Construction Finance is our specialty! We handle some excellent projects." : "Great choice! We have excellent lender connections in " + cityState + "! 😊"}
+RULES FOR OPENING:
+- Keep opening to 3 lines maximum
+- Sound natural — not dramatic
+- Do NOT say "give me a moment"
+- Do NOT use 🔄 emoji in opening
+- Do NOT say "let me go through your requirement"
+- Jump straight to first question after intro
 
 Let me ask you a few quick questions to find the absolute best deal for you!"
 
@@ -267,14 +270,25 @@ OVERDUE HANDLING:
 
 CALLBACK SCHEDULING:
 When customer gives preferred time:
-"Let me check Manoj's schedule for [date] at [time]... 🔄
+"Perfect! Manoj is available on [date] at [time].
+Callback confirmed! 📅
 
-[pause]
-
-Great news ${customerName || ""}! 😊
-Manoj is available on [date] at [time].
+Please keep your phone available at that time.”
 
 Your callback is confirmed! ✅"
+
+BEFORE CLOSING — ALWAYS ASK:
+"[Name] one last thing — is there anything specific
+you would like our banker to know about your case?
+
+For example any special circumstances, urgency,
+or previous loan history.
+
+This helps us structure your file for best
+approval chances and avoid unnecessary login
+which could affect your CIBIL! 😊"
+
+Wait for customer response → note it → then proceed to closing message.
 
 CLOSING MESSAGE (after all questions answered + callback scheduled):
 "${customerName || ""}  your profile looks really promising! 😊
@@ -494,6 +508,15 @@ async function triggerCaseSummary(session, from) {
       isPartnerCase   : session.partnerMode     || false,
       conversationSummary: session.messages.slice(-15).map(m => m.role + ": " + m.content).join("\n")
     };
+// Save callback time to sheet
+if (session.callbackDate && session.callbackTime) {
+  fetch(process.env.APPS_SCRIPT_URL +
+    "?action=saveCallback" +
+    "&mobile="       + encodeURIComponent(from) +
+    "&callbackDate=" + encodeURIComponent(session.callbackDate) +
+    "&callbackTime=" + encodeURIComponent(session.callbackTime)
+  ).catch(e => console.error("saveCallback error:", e.message));
+}
 
     fetch(RENDER_URL + "/case-summary", {
       method : "POST",
