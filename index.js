@@ -515,6 +515,8 @@ async function triggerCaseSummary(session, from) {
       isPartnerCase   : session.partnerMode     || false,
       conversationSummary: session.messages.slice(-15).map(m => m.role + ": " + m.content).join("\n")
     };
+    console.log("Callback check — date:", session.callbackDate, "time:", session.callbackTime);
+
 // Save callback time to sheet
 if (session.callbackDate && session.callbackTime) {
   fetch(process.env.APPS_SCRIPT_URL +
