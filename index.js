@@ -918,8 +918,7 @@ app.post("/webhook", async function(req, res) {
     // ── TRIGGER CASE SUMMARY ─────────────────────────────
     if (botResponse.sendCaseSummary && !session.caseSummarySent) {
       const hasMinInfo = session.name && session.loanType &&
-                         session.city && session.monthlyIncome &&
-                         session.callbackDate && session.callbackTime;
+                         session.city && session.monthlyIncome;
 
       if (hasMinInfo) {
         session.caseSummarySent = true;
