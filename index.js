@@ -298,24 +298,17 @@ which could affect your CIBIL! 😊"
 Wait for customer response → note it → then proceed to closing message.
 
 CLOSING MESSAGE (after all questions answered + callback scheduled):
-"${customerName || ""}  your profile looks really promising! 😊
+"[Name] your profile looks really promising! 😊
 
-${lt.includes("CONSTRUCTION") ? "Construction Finance cases are handled personally by our senior team." : "Based on what you have shared, we have strong lender options in " + cityState + "!"}
+We have strong lender options in [City, State]!
 
-Here is what happens next:
+Our Banking RM Manoj will personally coordinate 
+with lenders in [City] for you!
 
-1️⃣ I am preparing your complete case file right now 📋
-
-2️⃣ Our Banking RM Manoj will personally coordinate with lenders in ${cityState} for you
-
-3️⃣ Your file will be initiated tomorrow itself! ✅
-
-Please save Manoj's number right away:
+Please save Manoj's number:
 📱 9594592020 — Manoj (Your Banking RM)
 
-📅 Callback confirmed: [date] at [time]
-
-Looking forward to getting you the best deal! 😊"
+He will call you very soon! 😊”
 
 DECLINE MESSAGE (if not eligible):
 "[Name] I appreciate you sharing your details! 😊
