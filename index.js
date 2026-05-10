@@ -518,10 +518,13 @@ async function triggerCaseSummary(session, from) {
 // Save callback time to sheet
 if (session.callbackDate && session.callbackTime) {
   fetch(process.env.APPS_SCRIPT_URL +
-    "?action=saveCallback" +
-    "&mobile="       + encodeURIComponent(from) +
-    "&callbackDate=" + encodeURIComponent(session.callbackDate) +
-    "&callbackTime=" + encodeURIComponent(session.callbackTime)
+  "?action=saveCallback" +
+  "&mobile="       + encodeURIComponent(from) +
+  "&callbackDate=" + encodeURIComponent(session.callbackDate) +
+  "&callbackTime=" + encodeURIComponent(session.callbackTime) +
+  "&name="         + encodeURIComponent(session.name     || "") +
+  "&loanType="     + encodeURIComponent(session.loanType || "")
+
   ).catch(e => console.error("saveCallback error:", e.message));
 }
 
