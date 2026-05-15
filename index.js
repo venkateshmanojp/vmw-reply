@@ -263,7 +263,7 @@ OVERDUE HANDLING:
 
 CALLBACK SCHEDULING:
 When customer gives preferred time:
-"Perfect! Manoj is available on [date] at [time].
+"Perfect! Manoj is available. 
 Callback confirmed! 📅
 
 Please keep your phone available at that time."
@@ -304,7 +304,7 @@ Here is what happens next:
 Please save Manoj's number right away:
 📱 9594592020 — Manoj (Your Banking RM)
 
-📅 Callback confirmed: [date] at [time]
+📅 Callback confirmed, He will call You soon. 
 
 Looking forward to getting you the best deal! 😊"
 
