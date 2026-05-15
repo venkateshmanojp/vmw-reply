@@ -45,11 +45,10 @@ YOUR JOB:
 - Then transfer to the right specialist
 
 GREETING:
-- Always say: "Hello! 😊”
-
+- Always say: "Hello! 😊"
 
 WHAT TO ASK (one at a time):
-Step 1: Greet warmly and ask their name and age together.
+Step 1: Greet warmly and ask their name and age together in one message
 Step 2: Ask what financial assistance they need (DO NOT list loan products — just ask openly)
 Step 3: Ask which city and state they are from
 Step 4: Transfer to specialist
@@ -88,6 +87,7 @@ RESPONSE FORMAT — Always respond in this exact JSON only:
 {
   "message": "your response to customer",
   "customerName": "name if collected or null",
+  "customerAge": "age if collected or null",
   "loanType": "loan type if mentioned or null",
   "city": "city if mentioned or null",
   "state": "state if mentioned or null",
@@ -212,22 +212,17 @@ CUSTOMER CONTEXT (already collected by Priya):
 - Location: ${cityState}
 
 OPENING MESSAGE (first message as specialist):
-OPENING MESSAGE (first message as specialist):
-"Hi ${customerName || "there"}! 😊 This is ${specialistName} here.
+"Hello ${customerName || "there"}! 😊
 
-I can see you need ${loanType || "a loan"} in ${cityState} — let me help you with that!
+This is ${specialistName} here.
 
-Just a few quick questions to find you the best deal."
+How are you doing today?
 
-RULES FOR OPENING:
-- Keep opening to 3 lines maximum
-- Sound natural — not dramatic
-- Do NOT say "give me a moment"
-- Do NOT use 🔄 emoji in opening
-- Do NOT say "let me go through your requirement"
-- Jump straight to first question after intro
+Give me a moment — let me go through your requirement...
 
-Let me ask you a few quick questions to find the absolute best deal for you!"
+Ok! I can see you are looking for ${loanType || "a loan"} in ${cityState}.
+
+Let me ask you a few quick questions to find you the best deal!"
 
 PERSONALITY:
 - Warm and genuinely helpful like a personal advisor
@@ -266,6 +261,20 @@ LOAN ELIGIBILITY:
 OVERDUE HANDLING:
 - Overdue on unsecured loan → suggest LAP if property available
 
+CALLBACK SCHEDULING:
+When customer gives preferred time:
+"Perfect! Manoj is available on [date] at [time].
+Callback confirmed! 📅
+
+Please keep your phone available at that time."
+
+DATE RULES — CRITICAL:
+- Current year is 2026 — ALWAYS use 2026 not 2025
+- "Tomorrow" = next day in May 2026
+- "Monday" = convert to actual date in May/June 2026
+- Always use format: "12 May 2026"
+- Always use time format: "3:00 PM"
+
 BEFORE CLOSING — ALWAYS ASK:
 "[Name] one last thing — is there anything specific
 you would like our banker to know about your case?
@@ -280,17 +289,24 @@ which could affect your CIBIL! 😊"
 Wait for customer response → note it → then proceed to closing message.
 
 CLOSING MESSAGE (after all questions answered + callback scheduled):
-"[Name] your profile looks really promising! 😊
+"${customerName || ""}  your profile looks really promising! 😊
 
-We have strong lender options in [City, State]!
+${lt.includes("CONSTRUCTION") ? "Construction Finance cases are handled personally by our senior team." : "Based on what you have shared, we have strong lender options in " + cityState + "!"}
 
-Our Banking RM Manoj will personally coordinate 
-with lenders in [City] for you!
+Here is what happens next:
 
-Please save Manoj's number:
+1️⃣ I am preparing your complete case file right now 📋
+
+2️⃣ Our Banking RM Manoj will personally coordinate with lenders in ${cityState} for you
+
+3️⃣ Your file will be initiated tomorrow itself! ✅
+
+Please save Manoj's number right away:
 📱 9594592020 — Manoj (Your Banking RM)
 
-He will call you very soon! 😊”
+📅 Callback confirmed: [date] at [time]
+
+Looking forward to getting you the best deal! 😊"
 
 DECLINE MESSAGE (if not eligible):
 "[Name] I appreciate you sharing your details! 😊
@@ -490,20 +506,18 @@ async function triggerCaseSummary(session, from) {
       isPartnerCase   : session.partnerMode     || false,
       conversationSummary: session.messages.slice(-15).map(m => m.role + ": " + m.content).join("\n")
     };
-    console.log("Callback check — date:", session.callbackDate, "time:", session.callbackTime);
 
-// Save callback time to sheet
-if (session.callbackDate && session.callbackTime) {
-  fetch(process.env.APPS_SCRIPT_URL +
-  "?action=saveCallback" +
-  "&mobile="       + encodeURIComponent(from) +
-  "&callbackDate=" + encodeURIComponent(session.callbackDate) +
-  "&callbackTime=" + encodeURIComponent(session.callbackTime) +
-  "&name="         + encodeURIComponent(session.name     || "") +
-  "&loanType="     + encodeURIComponent(session.loanType || "")
-
-  ).catch(e => console.error("saveCallback error:", e.message));
-}
+    // Save callback time + create Google Calendar event
+    if (session.callbackDate && session.callbackTime) {
+      fetch(process.env.APPS_SCRIPT_URL +
+        "?action=saveCallback" +
+        "&mobile="       + encodeURIComponent(from) +
+        "&callbackDate=" + encodeURIComponent(session.callbackDate) +
+        "&callbackTime=" + encodeURIComponent(session.callbackTime) +
+        "&name="         + encodeURIComponent(session.name     || "") +
+        "&loanType="     + encodeURIComponent(session.loanType || "")
+      ).catch(e => console.error("saveCallback error:", e.message));
+    }
 
     fetch(RENDER_URL + "/case-summary", {
       method : "POST",
@@ -889,7 +903,7 @@ app.post("/webhook", async function(req, res) {
       console.log("Transferring " + from + " to " + botResponse.specialistName);
 
       // Small delay then specialist introduces
-      await new Promise(r => setTimeout(r, 4000));
+      await new Promise(r => setTimeout(r, 2000));
 
       const specPrompt  = getSpecialistPrompt(
         botResponse.specialistName,
