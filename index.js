@@ -506,6 +506,20 @@ async function triggerCaseSummary(session, from) {
       isPartnerCase   : session.partnerMode     || false,
       conversationSummary: session.messages.slice(-15).map(m => m.role + ": " + m.content).join("\n")
     };
+// Save all lead data to WA Leads
+fetch(process.env.APPS_SCRIPT_URL +
+  "?action=saveLeadData" +
+  "&mobile="         + encodeURIComponent(from) +
+  "&partnerMobile="  + encodeURIComponent(session.partnerCode  || "") +
+  "&loanAmount="     + encodeURIComponent(session.loanAmount   || "") +
+  "&age="            + encodeURIComponent(session.customerAge  || "") +
+  "&employmentType=" + encodeURIComponent(session.employmentType || "") +
+  "&monthlyIncome="  + encodeURIComponent(session.monthlyIncome || "") +
+  "&cibilScore="     + encodeURIComponent(session.cibilScore   || "") +
+  "&existingEMI="    + encodeURIComponent(session.existingEMI  || "") +
+  "&bounces="        + encodeURIComponent(session.bounces      || "") +
+  "&caseSummary=Generated"
+).catch(e => console.error("saveLeadData error:", e.message));
 
     // Save callback time + create Google Calendar event
     if (session.callbackDate && session.callbackTime) {
