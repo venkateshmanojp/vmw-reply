@@ -769,6 +769,49 @@ app.post("/webhook", async function(req, res) {
 
     // Store message
     await storeInAppsScript(from, text);
+// Check if partner lead exists for this customer
+if (!conversations[from] && text.toUpperCase().includes("START APPLICATION")) {
+  try {
+    const plRes  = await fetch(process.env.APPS_SCRIPT_URL +
+      "?action=getPartnerLeadByMobile&mobile=" + encodeURIComponent(from));
+    const plData = await plRes.json();
+    if (plData.success && plData.lead) {
+      const pl = plData.lead;
+      conversations[from] = {
+        layer          : "specialist",
+        specialistName : getSpecialistName(pl.loanType),
+        messages       : [],
+        priyaMessages  : [],
+        msgCount       : 0,
+        name           : pl.customerName,
+        customerAge    : null,
+        loanType       : pl.loanType,
+        loanAmount     : pl.loanAmount,
+        city           : pl.city,
+        state          : pl.state,
+        partnerMode    : true,
+        partnerCode    : pl.partnerMobile,
+        isPartnerLead  : true,
+        caseSummarySent: false,
+        employmentType : null,
+        monthlyIncome  : null,
+        cibilScore     : null,
+        existingEMI    : null,
+        bounces        : null,
+        companyName    : null,
+        workExperience : null,
+        businessVintage: null,
+        propertyDetails: null,
+        coApplicant    : null,
+        callbackDate   : null,
+        callbackTime   : null
+      };
+      console.log("✅ Partner lead loaded: " + from + " | " + pl.loanType);
+    }
+  } catch(e) {
+    console.error("Partner lead check error:", e.message);
+  }
+}
 
     // Initialize session
     if (!conversations[from]) {
