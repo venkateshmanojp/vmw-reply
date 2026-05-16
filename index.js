@@ -971,13 +971,27 @@ if (!conversations[from] && text.toUpperCase().includes("START APPLICATION")) {
       );
 
       const introResponse = await callClaude(
-        "START — introduce yourself to the customer as the specialist",
-        [],
-        specPrompt
-      );
+  "START — introduce yourself to the customer as the specialist",
+  [],
+  specPrompt
+);
 
-      if (introResponse && introResponse.message) {
-        await sendTextMessage(from, introResponse.message);
+if (introResponse && introResponse.message) {
+  // Split into 3 parts for natural feel
+  const parts = introResponse.message.split('\n\n');
+  
+  // Message 1 — Greeting
+  const greeting = parts[0] || introResponse.message;
+  await sendTextMessage(from, greeting);
+  await new Promise(r => setTimeout(r, 2000));
+  
+  // Message 2 — "Give me a moment"
+  await sendTextMessage(from, "Give me a moment — let me go through your requirement... 🔄");
+  await new Promise(r => setTimeout(r, 3000));
+  
+  // Message 3 — Context + first question
+  const rest = parts.slice(1).join('\n\n');
+  if (rest) await sendTextMessage(from, rest);
         session.messages.push({ role: "assistant", content: JSON.stringify(introResponse) });
       }
 
