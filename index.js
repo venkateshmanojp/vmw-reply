@@ -263,7 +263,7 @@ OVERDUE HANDLING:
 
 CALLBACK SCHEDULING:
 When customer gives preferred time:
-"Perfect! Manoj is available. 
+"Perfect! Manoj is available on [date] at [time].
 Callback confirmed! 📅
 
 Please keep your phone available at that time."
@@ -304,7 +304,7 @@ Here is what happens next:
 Please save Manoj's number right away:
 📱 9594592020 — Manoj (Your Banking RM)
 
-📅 Callback confirmed, He will call You soon. 
+📅 Callback confirmed: [date] at [time]
 
 Looking forward to getting you the best deal! 😊"
 
@@ -506,20 +506,6 @@ async function triggerCaseSummary(session, from) {
       isPartnerCase   : session.partnerMode     || false,
       conversationSummary: session.messages.slice(-15).map(m => m.role + ": " + m.content).join("\n")
     };
-// Save all lead data to WA Leads
-fetch(process.env.APPS_SCRIPT_URL +
-  "?action=saveLeadData" +
-  "&mobile="         + encodeURIComponent(from) +
-  "&partnerMobile="  + encodeURIComponent(session.partnerCode  || "") +
-  "&loanAmount="     + encodeURIComponent(session.loanAmount   || "") +
-  "&age="            + encodeURIComponent(session.customerAge  || "") +
-  "&employmentType=" + encodeURIComponent(session.employmentType || "") +
-  "&monthlyIncome="  + encodeURIComponent(session.monthlyIncome || "") +
-  "&cibilScore="     + encodeURIComponent(session.cibilScore   || "") +
-  "&existingEMI="    + encodeURIComponent(session.existingEMI  || "") +
-  "&bounces="        + encodeURIComponent(session.bounces      || "") +
-  "&caseSummary=Generated"
-).catch(e => console.error("saveLeadData error:", e.message));
 
     // Save callback time + create Google Calendar event
     if (session.callbackDate && session.callbackTime) {
@@ -532,6 +518,25 @@ fetch(process.env.APPS_SCRIPT_URL +
         "&loanType="     + encodeURIComponent(session.loanType || "")
       ).catch(e => console.error("saveCallback error:", e.message));
     }
+
+    // Save all lead data to WA Leads
+    fetch(process.env.APPS_SCRIPT_URL +
+      "?action=saveLeadData" +
+      "&mobile="         + encodeURIComponent(from) +
+      "&partnerMobile="  + encodeURIComponent(session.partnerCode    || "") +
+      "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
+      "&age="            + encodeURIComponent(session.customerAge    || "") +
+      "&employmentType=" + encodeURIComponent(session.employmentType || "") +
+      "&monthlyIncome="  + encodeURIComponent(session.monthlyIncome  || "") +
+      "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
+      "&existingEMI="    + encodeURIComponent(session.existingEMI    || "") +
+      "&bounces="        + encodeURIComponent(session.bounces        || "") +
+      "&caseSummary=Generated"
+    ).catch(e => console.error("saveLeadData error:", e.message));
+
+    // Wake up analyzer first to prevent sleeping issue
+    try { await fetch(RENDER_URL + "/"); } catch(e) {}
+    await new Promise(r => setTimeout(r, 2000));
 
     fetch(RENDER_URL + "/case-summary", {
       method : "POST",
@@ -554,10 +559,10 @@ async function saveLeadToSheet(mobile, name, loanType, city, status) {
     const url = process.env.APPS_SCRIPT_URL +
       "?action=storeMessage" +
       "&mobile="   + encodeURIComponent(mobile) +
-      "&message="  + encodeURIComponent(status || "Bot qualified lead") +
       "&name="     + encodeURIComponent(name     || "") +
       "&loanType=" + encodeURIComponent(loanType || "") +
-      "&city="     + encodeURIComponent(city     || "");
+      "&city="     + encodeURIComponent(city     || "") +
+      "&state="    + encodeURIComponent("");
     await fetch(url);
   } catch(e) {
     console.error("saveLeadToSheet error:", e.message);
@@ -570,10 +575,11 @@ async function saveLeadToSheet(mobile, name, loanType, city, status) {
 async function storeInAppsScript(mobile, message) {
   try {
     if (!process.env.APPS_SCRIPT_URL) return;
+    // Only store mobile — message is saved in Conversations tab separately
+    // Do NOT send message to storeMessage as it corrupts WA Leads columns
     const url = process.env.APPS_SCRIPT_URL +
       "?action=storeMessage" +
-      "&mobile="  + encodeURIComponent(mobile) +
-      "&message=" + encodeURIComponent(message || "");
+      "&mobile=" + encodeURIComponent(mobile);
     await fetch(url);
   } catch(e) {
     console.error("storeInAppsScript error:", e.message);
@@ -769,49 +775,50 @@ app.post("/webhook", async function(req, res) {
 
     // Store message
     await storeInAppsScript(from, text);
-// Check if partner lead exists for this customer
-if (!conversations[from] && text.toUpperCase().includes("START APPLICATION")) {
-  try {
-    const plRes  = await fetch(process.env.APPS_SCRIPT_URL +
-      "?action=getPartnerLeadByMobile&mobile=" + encodeURIComponent(from));
-    const plData = await plRes.json();
-    if (plData.success && plData.lead) {
-      const pl = plData.lead;
-      conversations[from] = {
-        layer          : "specialist",
-        specialistName : getSpecialistName(pl.loanType),
-        messages       : [],
-        priyaMessages  : [],
-        msgCount       : 0,
-        name           : pl.customerName,
-        customerAge    : null,
-        loanType       : pl.loanType,
-        loanAmount     : pl.loanAmount,
-        city           : pl.city,
-        state          : pl.state,
-        partnerMode    : true,
-        partnerCode    : pl.partnerMobile,
-        isPartnerLead  : true,
-        caseSummarySent: false,
-        employmentType : null,
-        monthlyIncome  : null,
-        cibilScore     : null,
-        existingEMI    : null,
-        bounces        : null,
-        companyName    : null,
-        workExperience : null,
-        businessVintage: null,
-        propertyDetails: null,
-        coApplicant    : null,
-        callbackDate   : null,
-        callbackTime   : null
-      };
-      console.log("✅ Partner lead loaded: " + from + " | " + pl.loanType);
+
+    // Check if partner lead exists for this customer
+    if (!conversations[from] && text.toUpperCase().includes("START APPLICATION")) {
+      try {
+        const plRes  = await fetch(process.env.APPS_SCRIPT_URL +
+          "?action=getPartnerLeadByMobile&mobile=" + encodeURIComponent(from));
+        const plData = await plRes.json();
+        if (plData.success && plData.lead) {
+          const pl = plData.lead;
+          conversations[from] = {
+            layer          : "specialist",
+            specialistName : getSpecialistName(pl.loanType),
+            messages       : [],
+            priyaMessages  : [],
+            msgCount       : 0,
+            name           : pl.customerName,
+            customerAge    : null,
+            loanType       : pl.loanType,
+            loanAmount     : pl.loanAmount,
+            city           : pl.city,
+            state          : pl.state,
+            partnerMode    : true,
+            partnerCode    : pl.partnerMobile,
+            isPartnerLead  : true,
+            caseSummarySent: false,
+            employmentType : null,
+            monthlyIncome  : null,
+            cibilScore     : null,
+            existingEMI    : null,
+            bounces        : null,
+            companyName    : null,
+            workExperience : null,
+            businessVintage: null,
+            propertyDetails: null,
+            coApplicant    : null,
+            callbackDate   : null,
+            callbackTime   : null
+          };
+          console.log("✅ Partner lead loaded: " + from + " | " + pl.loanType);
+        }
+      } catch(e) {
+        console.error("Partner lead check error:", e.message);
+      }
     }
-  } catch(e) {
-    console.error("Partner lead check error:", e.message);
-  }
-}
 
     // Initialize session
     if (!conversations[from]) {
@@ -971,27 +978,13 @@ if (!conversations[from] && text.toUpperCase().includes("START APPLICATION")) {
       );
 
       const introResponse = await callClaude(
-  "START — introduce yourself to the customer as the specialist",
-  [],
-  specPrompt
-);
+        "START — introduce yourself to the customer as the specialist",
+        [],
+        specPrompt
+      );
 
-if (introResponse && introResponse.message) {
-  // Split into 3 parts for natural feel
-  const parts = introResponse.message.split('\n\n');
-  
-  // Message 1 — Greeting
-  const greeting = parts[0] || introResponse.message;
-  await sendTextMessage(from, greeting);
-  await new Promise(r => setTimeout(r, 2000));
-  
-  // Message 2 — "Give me a moment"
-  await sendTextMessage(from, "Give me a moment — let me go through your requirement... 🔄");
-  await new Promise(r => setTimeout(r, 3000));
-  
-  // Message 3 — Context + first question
-  const rest = parts.slice(1).join('\n\n');
-  if (rest) await sendTextMessage(from, rest);
+      if (introResponse && introResponse.message) {
+        await sendTextMessage(from, introResponse.message);
         session.messages.push({ role: "assistant", content: JSON.stringify(introResponse) });
       }
 
