@@ -239,8 +239,9 @@ ${questions}
 QUALIFICATION CRITERIA:
 Age: Maximum age at LAST EMI = 60 years (no exceptions)
 Income: Above ₹25,000 → proceed | ₹15,000-25,000 → limited options | Below ₹15,000 → decline
-CIBIL PL/BL: Minimum 700 | Below 700 → decline (suggest LAP if property available)
-CIBIL HL/LAP: Minimum 650 | 650-700 → limited lenders
+CIBIL PL/BL: Minimum 700 | Below 700 → DECLINE immediately (suggest LAP/HL if property available)
+CIBIL HL/LAP: Minimum 650 | Below 650 → DECLINE immediately | 650-700 → limited lenders proceed with caution
+CIBIL BL: Minimum 700 | Below 700 → DECLINE immediately
 FOIR: Maximum 50% of income for EMIs
 Bounces: 0 → excellent | 1-2 → limited | 3+ → decline
 Work experience (salaried): Minimum 1 year total
