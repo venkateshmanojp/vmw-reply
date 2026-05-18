@@ -261,12 +261,6 @@ LOAN ELIGIBILITY:
 OVERDUE HANDLING:
 - Overdue on unsecured loan → suggest LAP if property available
 
-CALLBACK SCHEDULING:
-When customer gives preferred time:
-"Perfect! Manoj is available on [date] at [time].
-Callback confirmed! 📅
-
-Please keep your phone available at that time."
 
 DATE RULES — CRITICAL:
 - Current year is 2026 — ALWAYS use 2026 not 2025
@@ -304,7 +298,7 @@ Here is what happens next:
 Please save Manoj's number right away:
 📱 9594592020 — Manoj (Your Banking RM)
 
-📅 Callback confirmed: [date] at [time]
+He will call you very soon. 
 
 Looking forward to getting you the best deal! 😊"
 
@@ -360,8 +354,8 @@ RESPONSE FORMAT — Always respond in this exact JSON only:
   "businessVintage": "vintage if mentioned or null",
   "propertyDetails": "property details if mentioned or null",
   "coApplicant": "co-applicant details if mentioned or null",
-  "callbackDate": "callback date if confirmed or null",
-  "callbackTime": "callback time if confirmed or null",
+  "callbackDate": null,
+  "callbackTime": null,
   "qualificationStatus": "ELIGIBLE or DECLINED or IN_PROGRESS",
   "sendCaseSummary": true or false
 }
