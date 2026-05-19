@@ -528,6 +528,12 @@ async function triggerCaseSummary(session, from) {
       "&bounces="        + encodeURIComponent(session.bounces        || "") +
       "&caseSummary=Generated"
     ).catch(e => console.error("saveLeadData error:", e.message));
+// Update broadcast sheet if broadcast lead
+if (session.isBroadcastLead) {
+  fetch(process.env.APPS_SCRIPT_URL +
+    "?action=updateBroadcastBrief&mobile=" + encodeURIComponent(from)
+  ).catch(e => console.error("updateBroadcastBrief error:", e.message));
+}
 
     // Wake up analyzer first to prevent sleeping issue
     try { await fetch(RENDER_URL + "/"); } catch(e) {}
@@ -772,6 +778,37 @@ app.post("/webhook", async function(req, res) {
     await storeInAppsScript(from, text);
 
     // Check if partner lead exists for this customer
+    // Check if broadcast lead (GST data) exists
+if (!conversations[from]) {
+  try {
+    const brRes  = await fetch(process.env.APPS_SCRIPT_URL +
+      "?action=getBroadcastLead&mobile=" + encodeURIComponent(from));
+    const brData = await brRes.json();
+    if (brData.success && brData.lead) {
+      const bl = brData.lead;
+      conversations[from] = {
+        layer:"specialist", specialistName:"Vikram",
+        messages:[], priyaMessages:[], msgCount:0,
+        name:bl.companyName, customerAge:null,
+        loanType:"Business Loan", loanAmount:null,
+        city:bl.city, state:"Maharashtra",
+        employmentType:"Self-Employed",
+        monthlyIncome:null, cibilScore:null,
+        existingEMI:null, bounces:null,
+        companyName:bl.companyName, workExperience:null,
+        businessVintage:null, propertyDetails:null,
+        coApplicant:null, callbackDate:null,
+        callbackTime:null, partnerMode:false,
+        partnerCode:null, caseSummarySent:false,
+        isBroadcastLead:true, gstNo:bl.gst
+      };
+      fetch(process.env.APPS_SCRIPT_URL +
+        "?action=updateBroadcastReply&mobile=" + encodeURIComponent(from)
+      ).catch(function(){});
+    }
+  } catch(e) { console.error("Broadcast check error:", e.message); }
+}
+
     if (!conversations[from] && text.toUpperCase().includes("START APPLICATION")) {
       try {
         const plRes  = await fetch(process.env.APPS_SCRIPT_URL +
