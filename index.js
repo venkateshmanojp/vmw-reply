@@ -776,6 +776,64 @@ app.post("/webhook", async function(req, res) {
 
     // Store message
     await storeInAppsScript(from, text);
+// Check if QR lead (VMWREF prefix)
+    if (text.toUpperCase().startsWith("VMWREF:") && !conversations[from]) {
+      try {
+        // Parse: VMWREF:Name|LoanType|City|PartnerCode
+        var ref     = text.substring(7); // Remove "VMWREF:"
+        var parts   = ref.split("|");
+        var refName = parts[0] || "";
+        var refLoan = parts[1] || "Personal Loan";
+        var refCity = parts[2] || "";
+        var refCode = parts[3] || "";
+
+
+        // Save to WA Leads via Apps Script
+        fetch(process.env.APPS_SCRIPT_URL +
+          "?action=saveQRLead" +
+          "&mobile="         + encodeURIComponent(from) +
+          "&name="           + encodeURIComponent(refName) +
+          "&loanType="       + encodeURIComponent(refLoan) +
+          "&city="           + encodeURIComponent(refCity) +
+          "&partnerMobile="  + encodeURIComponent(refCode)
+        ).catch(function(){});
+
+
+        // Pre-load session — skip Priya!
+        conversations[from] = {
+          layer          : "specialist",
+          specialistName : getSpecialistName(refLoan),
+          messages       : [],
+          priyaMessages  : [],
+          msgCount       : 0,
+          name           : refName,
+          customerAge    : null,
+          loanType       : refLoan,
+          loanAmount     : null,
+          city           : refCity,
+          state          : null,
+          employmentType : null,
+          monthlyIncome  : null,
+          cibilScore     : null,
+          existingEMI    : null,
+          bounces        : null,
+          companyName    : null,
+          workExperience : null,
+          businessVintage: null,
+          propertyDetails: null,
+          coApplicant    : null,
+          callbackDate   : null,
+          callbackTime   : null,
+          partnerMode    : true,
+          partnerCode    : refCode,
+          caseSummarySent: false,
+          isQRLead       : true
+        };
+        console.log("✅ QR Lead loaded: " + from + " | " + refName + " | " + refLoan);
+      } catch(e) {
+        console.error("QR lead error:", e.message);
+      }
+    }
 
     // Check if partner lead exists for this customer
     // Check if broadcast lead (GST data) exists
