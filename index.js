@@ -1089,13 +1089,71 @@ if (!conversations[from]) {
                          session.city && session.monthlyIncome;
 
       if (hasMinInfo) {
+
+        // ── REJECTION FILTERS ─────────────────────────────
+        const loanType = (session.loanType||"").toLowerCase();
+        const cibil    = parseInt(session.cibilScore||0);
+        const bounces  = parseInt(session.bounces||0);
+        const income   = parseFloat(session.monthlyIncome||0);
+        const emis     = parseFloat(session.existingEMI||0);
+        const foir     = income > 0 ? (emis/income)*100 : 0;
+        const isPLBL   = loanType.indexOf("personal")!==-1 || 
+                         loanType.indexOf("business")!==-1;
+
+        let rejectReason = "";
+
+        // FOIR check — all loan types
+        if (foir > 70) {
+          rejectReason = "foir";
+        }
+        // PL/BL checks
+        else if (isPLBL) {
+          if (cibil < 680) rejectReason = "cibil_plbl";
+          else if (bounces > 0) rejectReason = "bounces_plbl";
+        }
+        // Other loans HL/LAP/CF/BT
+        else {
+          if (cibil < 650) rejectReason = "cibil_other";
+          else if (bounces > 2) rejectReason = "bounces_other";
+        }
+
+        // ── SEND REJECTION MESSAGE ────────────────────────
+        if (rejectReason) {
+          let rejectMsg = "";
+
+          if (rejectReason === "foir") {
+            rejectMsg = "Thank you for sharing your details! 🙏\n\nBased on your profile, your current EMI obligations are high (above 70% of your income).\n\n*Our suggestion:*\n→ Try to close or reduce existing EMIs ✅\n→ Increase income sources if possible ✅\n→ Reapply once EMIs reduce ✅\n\nWe will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
+          }
+          else if (rejectReason === "cibil_plbl") {
+            rejectMsg = "Thank you for your interest! 🙏\n\nFor a Personal/Business Loan, a minimum CIBIL score of 680 is required.\n\n*To improve your score:*\n→ Clear all overdue EMIs ✅\n→ Avoid new credit applications ✅\n→ Maintain 0 bounces for 6 months ✅\n→ Keep credit utilization below 30% ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
+          }
+          else if (rejectReason === "bounces_plbl") {
+            rejectMsg = "Thank you for your interest! 🙏\n\nFor a Personal/Business Loan, a clean repayment track record with no bounces is required.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Ensure sufficient balance on EMI dates ✅\n→ Clear any pending dues ✅\n\nPlease contact us after 6 months of clean history! 😊\n\n*VastMyWealth Advisory*";
+          }
+          else if (rejectReason === "cibil_other") {
+            rejectMsg = "Thank you for your interest! 🙏\n\nFor this loan type, a minimum CIBIL score of 650 is required.\n\n*To improve your score:*\n→ Clear all overdue payments ✅\n→ Maintain regular EMI payments ✅\n→ Avoid multiple loan applications ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
+          }
+          else if (rejectReason === "bounces_other") {
+            rejectMsg = "Thank you for your interest! 🙏\n\nYour account shows more than 2 bounces which affects loan eligibility.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Clear all pending dues ✅\n→ Ensure sufficient balance on EMI dates ✅\n\nPlease contact us after improving your repayment history! 😊\n\n*VastMyWealth Advisory*";
+          }
+
+          // Send rejection message to customer
+          await sendWhatsAppMessage(from, rejectMsg);
+
+          // Save as rejected in sheet
+          await saveLeadToSheet(from, session.name, session.loanType, 
+                                session.city, "Rejected - Auto");
+
+          // Clear session
+          delete conversations[from];
+          return;
+        }
+
+        // ── NO REJECTION — PROCEED WITH CASE BRIEF ───────
         session.caseSummarySent = true;
         console.log("Case summary triggered for: " + from);
-
-        // Save lead with Case Ready status
-        await saveLeadToSheet(from, session.name, session.loanType, session.city, "Case Ready");
-
-        // Trigger case summary
+        await saveLeadToSheet(from, session.name, session.loanType, 
+                              session.city, "Case Ready");
         await triggerCaseSummary(session, from);
       }
     }
