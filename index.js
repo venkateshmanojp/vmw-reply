@@ -1030,9 +1030,7 @@ if (!conversations[from]) {
     }
 
     // Extract data
-    if (botResponse.cibilScore)      session.cibilScore      = botResponse.cibilScore;
-if (botResponse.bounces)         session.bounces         = botResponse.bounces;
-
+    if (botResponse.customerName)    session.name            = botResponse.customerName;
     if (botResponse.customerAge)     session.customerAge     = botResponse.customerAge;
     if (botResponse.loanType)        session.loanType        = botResponse.loanType;
     if (botResponse.loanAmount)      session.loanAmount      = botResponse.loanAmount;
@@ -1121,7 +1119,8 @@ if (botResponse.bounces)         session.bounces         = botResponse.bounces;
       // Small delay then specialist introduces
       await new Promise(r => setTimeout(r, 2000));
 
-      const specPrompt  = getSpecialistProconst specPrompt  = getSpecialistPrompt(
+      const specPrompt = getSpecialistPrompt(
+
         botResponse.specialistName,
         session.loanType,
         session.name,
@@ -1203,7 +1202,8 @@ if (botResponse.bounces)         session.bounces         = botResponse.bounces;
           }
 
           // Send rejection message to customer
-          await sendWhatsAppMessage(from, rejectMsg);
+          await sendTextMessage(from, rejectMsg);
+
 
           // Save as rejected in sheet
           await saveLeadToSheet(from, session.name, session.loanType, 
