@@ -50,8 +50,9 @@ GREETING:
 WHAT TO ASK (one at a time):
 Step 1: Greet warmly and ask their name and age together in one message
 Step 2: Ask what financial assistance they need (DO NOT list loan products — just ask openly)
-Step 3: Ask which city and state they are from
-Step 4: Transfer to specialist
+Step 3: Ask approximate CIBIL score (suggest checking on GPay/PaisaBazaar if not sure) and if any EMI bounces in last 6 months
+Step 4: Ask which city and state they are from
+Step 5: Transfer to specialist
 
 TRANSFER MESSAGE (based on loan type):
 - Home Loan / LAP / BT+TU → Transfer to Rahul
@@ -92,16 +93,20 @@ RESPONSE FORMAT — Always respond in this exact JSON only:
   "city": "city if mentioned or null",
   "state": "state if mentioned or null",
   "transferToSpecialist": true or false,
-  "specialistName": "Rahul or Amit or Vikram or Venkatesh or null"
+  "specialistName": "Rahul or Amit or Vikram or Venkatesh or null",
+  "cibilScore": "approximate CIBIL if mentioned or null",
+  "bounces": "number of bounces if mentioned or null”
+
 }
 
-Set transferToSpecialist=true ONLY after collecting name + loan type + city`;
+Set transferToSpecialist=true ONLY after collecting name + loan type + CIBIL + city`;
 
 // ============================================================
 // LAYER 2 — SPECIALIST PROMPTS
 // ============================================================
 
-function getSpecialistPrompt(specialistName, loanType, customerName, city, state) {
+function getSpecialistPrompt(specialistName, loanType, customerName, city, state, cibil, bounces) {
+
   const cityState = city ? (state ? city + ", " + state : city) : "your city";
 
   const specialists = {
@@ -210,6 +215,8 @@ CUSTOMER CONTEXT (already collected by Priya):
 - Customer Name: ${customerName || "Customer"}
 - Loan Type: ${loanType || "Not specified"}
 - Location: ${cityState}
+- Approximate CIBIL: ${cibil || "Not mentioned"}
+- Bounces: ${bounces || "Not mentioned"}
 
 OPENING MESSAGE (first message as specialist):
 "Hello ${customerName || "there"}! 😊
@@ -991,13 +998,16 @@ if (!conversations[from]) {
       currentHistory = session.messages;
     } else {
       // Specialist layer
-      systemPrompt   = getSpecialistPrompt(
+      systemPrompt = getSpecialistPrompt(
         session.specialistName,
         session.loanType,
         session.name,
         session.city,
-        session.state
+        session.state,
+        session.cibilScore,
+        session.bounces
       );
+
       currentHistory = session.messages;
     }
 
@@ -1020,7 +1030,9 @@ if (!conversations[from]) {
     }
 
     // Extract data
-    if (botResponse.customerName)    session.name            = botResponse.customerName;
+    if (botResponse.cibilScore)      session.cibilScore      = botResponse.cibilScore;
+if (botResponse.bounces)         session.bounces         = botResponse.bounces;
+
     if (botResponse.customerAge)     session.customerAge     = botResponse.customerAge;
     if (botResponse.loanType)        session.loanType        = botResponse.loanType;
     if (botResponse.loanAmount)      session.loanAmount      = botResponse.loanAmount;
@@ -1050,6 +1062,55 @@ if (!conversations[from]) {
 
     // ── PRIYA TRANSFERS TO SPECIALIST ────────────────────
     if (session.layer === "priya" && botResponse.transferToSpecialist && botResponse.specialistName) {
+
+      // ── EARLY REJECTION AT PRIYA LEVEL ───────────────
+      const earlyLoanType = (session.loanType||"").toLowerCase();
+      const earlyCibil    = parseInt(session.cibilScore||0);
+      const earlyBounces  = parseInt(session.bounces||0);
+      const earlyIsPLBL   = earlyLoanType.indexOf("personal")!==-1 || 
+                            earlyLoanType.indexOf("business")!==-1;
+
+      let earlyReject = "";
+
+      if (earlyCibil > 0) {
+        if (earlyIsPLBL) {
+          if (earlyCibil < 680)  earlyReject = "cibil_plbl";
+          if (earlyBounces > 0)  earlyReject = "bounces_plbl";
+        } else {
+          if (earlyCibil < 650)  earlyReject = "cibil_other";
+          if (earlyBounces > 2)  earlyReject = "bounces_other";
+        }
+      }
+
+      if (earlyReject) {
+        let earlyMsg = "";
+
+        if (earlyReject === "cibil_plbl") {
+          earlyMsg = "Thank you for sharing! 🙏\n\nFor a Personal/Business Loan, a minimum CIBIL score of 680 is required.\n\n*To improve your score:*\n→ Clear all overdue EMIs ✅\n→ Avoid new credit applications ✅\n→ Maintain 0 bounces for 6 months ✅\n→ Keep credit utilization below 30% ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
+        }
+        else if (earlyReject === "bounces_plbl") {
+          earlyMsg = "Thank you for sharing! 🙏\n\nFor a Personal/Business Loan, a clean repayment track record with no bounces is required.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Ensure sufficient balance on EMI dates ✅\n→ Clear any pending dues ✅\n\nPlease contact us after 6 months of clean history! 😊\n\n*VastMyWealth Advisory*";
+        }
+        else if (earlyReject === "cibil_other") {
+          earlyMsg = "Thank you for sharing! 🙏\n\nFor this loan type, a minimum CIBIL score of 650 is required.\n\n*To improve your score:*\n→ Clear all overdue payments ✅\n→ Maintain regular EMI payments ✅\n→ Avoid multiple loan applications ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
+        }
+        else if (earlyReject === "bounces_other") {
+          earlyMsg = "Thank you for sharing! 🙏\n\nYour account shows more than 2 bounces which affects loan eligibility.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Clear all pending dues ✅\n→ Ensure sufficient balance on EMI dates ✅\n\nPlease contact us after improving your repayment history! 😊\n\n*VastMyWealth Advisory*";
+        }
+
+        // Send rejection
+        await sendTextMessage(from, earlyMsg);
+
+        // Save as rejected
+        await saveLeadToSheet(from, session.name, session.loanType,
+                              session.city, "Rejected - Auto");
+
+        // Clear session
+        delete conversations[from];
+        return;
+      }
+
+      // ── NO REJECTION — PROCEED TO SPECIALIST ─────────
       session.layer          = "specialist";
       session.specialistName = botResponse.specialistName;
       session.messages       = []; // Fresh history for specialist
@@ -1059,13 +1120,16 @@ if (!conversations[from]) {
       // Small delay then specialist introduces
       await new Promise(r => setTimeout(r, 2000));
 
-      const specPrompt  = getSpecialistPrompt(
+      const specPrompt  = getSpecialistProconst specPrompt  = getSpecialistPrompt(
         botResponse.specialistName,
         session.loanType,
         session.name,
         session.city,
-        session.state
+        session.state,
+        session.cibilScore,
+        session.bounces
       );
+
 
       const introResponse = await callClaude(
         "START — introduce yourself to the customer as the specialist",
