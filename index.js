@@ -1065,7 +1065,8 @@ if (botResponse.bounces)         session.bounces         = botResponse.bounces;
 
       // ── EARLY REJECTION AT PRIYA LEVEL ───────────────
       const earlyLoanType = (session.loanType||"").toLowerCase();
-      const earlyCibil    = parseInt(session.cibilScore||0);
+      const earlyCibil = parseInt((session.cibilScore||"0").replace(/[^0-9]/g,""))||0;
+
       const earlyBounces  = parseInt(session.bounces||0);
       const earlyIsPLBL   = earlyLoanType.indexOf("personal")!==-1 || 
                             earlyLoanType.indexOf("business")!==-1;
