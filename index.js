@@ -142,8 +142,9 @@ Ok! I can see you are looking for ${loanType || "a loan"} in ${cityPin}.
 Let me ask you a few quick questions to find you the best deal!"
 
 FIELDS YOU MUST COLLECT — ask ONE at a time, IN ANY ORDER that fits the conversation naturally:
-1. Employment type — Salaried or Self-Employed
-2. If Self-Employed ONLY: date/year GST was registered (skip entirely if Salaried)
+${specialistName === "Vikram" ? `1. This is a Business Loan — the customer is Self-Employed by default. Do NOT ask if they are salaried or self-employed.
+2. GST registration date/year (ask directly)` : `1. Employment type — Salaried or Self-Employed
+2. If Self-Employed ONLY: date/year GST was registered (skip entirely if Salaried)`}
 3. Approximate CIBIL score (suggest checking on GPay/PaisaBazaar if not sure)
 4. Loan amount required
 5. Any cheque/ECS bounces in last 6 months (get a number, 0 if none)
@@ -782,6 +783,12 @@ app.post("/webhook", async function(req, res) {
       await sendTextMessage(from, "Hi! 😊 Your case is already with our team.\n\nOur Banking RM Manoj will connect with you shortly.\n\nFor any urgent queries feel free to message here!");
       return;
     }
+    // ── ALREADY REJECTED ──────────────────────────────────
+    if (session.rejected) {
+      await sendTextMessage(from, "Hi! 😊 We've already reviewed your profile and shared feedback earlier.\n\nOnce it improves, just message us again — we'll be happy to help! 🙏");
+      return;
+    }
+
 
     // ── PARTNER LOGIN ────────────────────────────────────
     if (text.toUpperCase() === "PARTNER LOGIN") {
@@ -876,7 +883,7 @@ app.post("/webhook", async function(req, res) {
       if (rejectReason) {
         await sendTextMessage(from, rejectMessageFor(rejectReason));
         await saveLeadToSheet(from, session.name, session.loanType, session.city, "Rejected - Auto");
-        delete conversations[from];
+        session.rejected = true;
         return;
       }
     }
@@ -892,6 +899,7 @@ app.post("/webhook", async function(req, res) {
       session.layer          = "specialist";
       session.specialistName = botResponse.specialistName;
       session.messages       = []; // Fresh history for specialist
+      if (session.specialistName === "Vikram") session.employmentType = "Self-Employed"; // Business Loan implies self-employed
 
       console.log("Transferring " + from + " to " + botResponse.specialistName);
 
@@ -942,8 +950,9 @@ app.post("/webhook", async function(req, res) {
     // ── HANDLE DECLINED (specialist explicitly declined mid-flow) ───
     if (botResponse.qualificationStatus === "DECLINED") {
       await saveLeadToSheet(from, session.name, session.loanType, session.city, "Declined");
-      delete conversations[from];
+      session.rejected = true;
     }
+
 
   } catch(err) {
     console.error("Webhook error:", err.message);
