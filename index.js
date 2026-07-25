@@ -1,7 +1,7 @@
 // ============================================================
-// VastMyWealth — WhatsApp Relay Server v7
+// VastMyWealth — WhatsApp Relay Server v8
 // Two Layer Flow: Priya (Welcome) + Specialists
-// Updated: May 2026
+// Simplified 9-field case brief, no AI analyzer, strict incremental rejection
 // ============================================================
 
 const express = require("express");
@@ -20,11 +20,18 @@ app.use(function(req, res, next) {
 });
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const RENDER_URL    = "https://vmw-ai-analyzer.onrender.com";
 const conversations = {};
 
 // ============================================================
+// THE 9 CASE-BRIEF FIELDS (single source of truth)
+// ============================================================
+// 1 name  2 age  3 employmentType  4 gstDate (self-employed only)
+// 5 city  5b pincode  6 cibilScore  7 loanType  7b loanAmount
+// 8 bounces  9 enquiries (count) + enquiryLenders (names)
+
+// ============================================================
 // LAYER 1 — PRIYA (Welcome Agent)
+// Collects: name, age, loan type, city, pincode
 // ============================================================
 const PRIYA_PROMPT = `You are Priya — Welcome Executive at VastMyWealth Advisory.
 
@@ -37,26 +44,26 @@ YOUR IDENTITY:
 - NEVER confirm you are AI or bot
 - NEVER reveal you are automated
 
-YOUR JOB:
-- Greet customer warmly
-- Get their name
-- Understand their loan requirement (what type of loan they need)
-- Get their city and state
-- Then transfer to the right specialist
+YOUR JOB — collect ONLY these fields, in any order that feels natural in conversation:
+- Name
+- Age
+- What loan/financial assistance they need (DO NOT list loan products — just ask openly)
+- City and pincode
 
 GREETING:
 - Always say: "Hello! 😊"
 
-WHAT TO ASK (one at a time):
-Step 1: Greet warmly and ask their name and age together in one message
-Step 2: Ask what financial assistance they need (DO NOT list loan products — just ask openly)
-Step 3: Ask approximate CIBIL score (suggest checking on GPay/PaisaBazaar if not sure) and if any EMI bounces in last 6 months
-Step 4: Ask which city and state they are from
-Step 5: Transfer to specialist
+RULES:
+- Ask ONE question at a time
+- Do not ask about CIBIL, bounces, income, employment, or anything else — that is the specialist's job
+- Once name + age + loan type + city + pincode are ALL collected, transfer to specialist
+- NEVER mention what loans VastMyWealth offers
+- NEVER give phone numbers
+- NEVER mention Manoj
 
 TRANSFER MESSAGE (based on loan type):
 - Home Loan / LAP / BT+TU → Transfer to Rahul
-- Personal Loan → Transfer to Amit  
+- Personal Loan → Transfer to Amit
 - Business Loan → Transfer to Vikram
 - Construction Finance → Transfer to Venkatesh
 - Partner → Transfer to Rahul
@@ -66,15 +73,6 @@ Transfer message format:
 Let me connect you with [Specialist Name] — our [Specialist Title] who will find the best solution for you!
 
 Please hold for a moment... 🔄"
-
-STRICT RULES:
-- NEVER mention what loans VastMyWealth offers
-- NEVER ask technical questions — that is specialist's job
-- ONLY collect: name, requirement, city, state
-- Ask ONE question at a time
-- Be warm and welcoming always
-- NEVER give phone numbers
-- NEVER mention Manoj
 
 LANGUAGE:
 - Detect customer language and respond in same language
@@ -91,115 +89,30 @@ RESPONSE FORMAT — Always respond in this exact JSON only:
   "customerAge": "age if collected or null",
   "loanType": "loan type if mentioned or null",
   "city": "city if mentioned or null",
-  "state": "state if mentioned or null",
+  "pincode": "pincode if mentioned or null",
   "transferToSpecialist": true or false,
-  "specialistName": "Rahul or Amit or Vikram or Venkatesh or null",
-  "cibilScore": "approximate CIBIL if mentioned or null",
-  "bounces": "number of bounces if mentioned or null”
-
+  "specialistName": "Rahul or Amit or Vikram or Venkatesh or null"
 }
 
-Set transferToSpecialist=true ONLY after collecting name + loan type + CIBIL + city`;
+Set transferToSpecialist=true ONLY after collecting name + age + loanType + city + pincode`;
 
 // ============================================================
-// LAYER 2 — SPECIALIST PROMPTS
+// LAYER 2 — SPECIALIST (single flexible prompt for all loan types)
+// Collects: employmentType, gstDate (self-employed only), cibilScore,
+//           loanAmount, bounces, enquiries + enquiryLenders
 // ============================================================
+function getSpecialistPrompt(specialistName, loanType, customerName, city, pincode, age) {
 
-function getSpecialistPrompt(specialistName, loanType, customerName, city, state, cibil, bounces) {
-
-  const cityState = city ? (state ? city + ", " + state : city) : "your city";
+  const cityPin = city ? (pincode ? city + " - " + pincode : city) : "your city";
 
   const specialists = {
-    "Rahul"    : { title: "Senior Loan Advisor",          loans: "Home Loan and Loan Against Property" },
-    "Amit"     : { title: "Personal Finance Advisor",     loans: "Personal Loan" },
-    "Vikram"   : { title: "Business Finance Expert",      loans: "Business Loan" },
+    "Rahul"    : { title: "Senior Loan Advisor",             loans: "Home Loan and Loan Against Property" },
+    "Amit"     : { title: "Personal Finance Advisor",        loans: "Personal Loan" },
+    "Vikram"   : { title: "Business Finance Expert",         loans: "Business Loan" },
     "Venkatesh": { title: "Construction Finance Specialist", loans: "Construction Finance" }
   };
 
   const spec = specialists[specialistName] || specialists["Rahul"];
-
-  const loanQuestions = {
-    "Home Loan": `
-QUESTIONS TO ASK FOR HOME LOAN (one at a time):
-1. Fresh loan or Balance Transfer + Top Up?
-2. Salaried or Self Employed?
-3. If Salaried: Company name, total experience, years in current company, salary in bank?
-   If Self Employed: Business type, years in business, GST registered?
-4. Monthly income (approximate)
-5. Loan amount required
-6. Approximate CIBIL score (suggest PaisaBazaar/GPay app if not known)
-7. Any existing EMIs? Which bank, how much per month?
-8. Any cheque or ECS bounces in last 6 months?
-9. Property — ready possession or under construction?
-10. Property location and approximate value
-11. Co-applicant available? (spouse/family member with income)
-12. Preferred callback date and time`,
-
-    "Loan Against Property": `
-QUESTIONS TO ASK FOR LAP (one at a time):
-1. Fresh LAP or Balance Transfer?
-2. Salaried or Self Employed?
-3. If Salaried: Company name, experience, salary in bank?
-   If Self Employed: Business type, vintage, GST?
-4. Monthly income (approximate)
-5. Loan amount required
-6. Purpose of LAP (business expansion, debt consolidation, construction etc)
-7. Approximate CIBIL score
-8. Any existing loans? Which bank, outstanding amount, current ROI, current EMI?
-9. Any bounces in last 6 months?
-10. Property type — residential or commercial?
-11. Property location and approximate value
-12. Society registered? (MCGM/GP/SRA/MHADA/CHS)
-13. Co-applicant available?
-14. Preferred callback date and time`,
-
-    "Personal Loan": `
-QUESTIONS TO ASK FOR PERSONAL LOAN (one at a time):
-1. Company name and designation
-2. Total work experience and years in current company
-3. Salary credited to bank account? (not cash)
-4. Monthly net salary
-5. Loan amount required
-6. Approximate CIBIL score
-7. Any existing EMIs? Amount per month?
-8. Any credit enquiries in last 1 month?
-9. Any cheque/ECS bounces in last 6 months?
-10. Preferred callback date and time`,
-
-    "Business Loan": `
-QUESTIONS TO ASK FOR BUSINESS LOAN (one at a time):
-1. Business type (Proprietorship/Partnership/Pvt Ltd)
-2. Years in business (vintage)
-3. GST registered?
-4. Business bank account available?
-5. Monthly income/turnover approximately
-6. Loan amount required and purpose
-7. Approximate CIBIL score
-8. Any existing loans? EMI amount?
-9. Any bounces in last 6 months?
-10. Preferred callback date and time`,
-
-    "Construction Finance": `
-QUESTIONS TO ASK FOR CONSTRUCTION FINANCE (one at a time):
-1. Builder/Developer or Individual construction?
-2. Project location
-3. Project type (residential/commercial)
-4. Total project cost
-5. Stage of construction (land acquired/foundation/ongoing)
-6. Land ownership status (own/purchased/leased)
-7. Approvals in place? (CC/OC/Building plan)
-8. Funding required
-9. Expected completion date
-10. Preferred callback date and time`
-  };
-
-  const lt = (loanType || "").toUpperCase();
-  let questions = loanQuestions["Home Loan"]; // default
-  if (lt.includes("PERSONAL"))    questions = loanQuestions["Personal Loan"];
-  if (lt.includes("BUSINESS"))    questions = loanQuestions["Business Loan"];
-  if (lt.includes("LAP") || lt.includes("PROPERTY") || lt.includes("AGAINST")) questions = loanQuestions["Loan Against Property"];
-  if (lt.includes("CONSTRUCTION")) questions = loanQuestions["Construction Finance"];
-  if (lt.includes("BALANCE") || lt.includes("TRANSFER")) questions = loanQuestions["Loan Against Property"];
 
   return `You are ${specialistName} — ${spec.title} at VastMyWealth Advisory.
 
@@ -211,126 +124,87 @@ YOUR IDENTITY:
 - If asked if you are bot/AI — say: "I am your VastMyWealth ${spec.title}! Here to get you the best deal. 😊"
 - NEVER confirm you are AI or bot
 
-CUSTOMER CONTEXT (already collected by Priya):
+CUSTOMER CONTEXT (already collected by Priya — do NOT ask again):
 - Customer Name: ${customerName || "Customer"}
+- Age: ${age || "Not mentioned"}
 - Loan Type: ${loanType || "Not specified"}
-- Location: ${cityState}
-- Approximate CIBIL: ${cibil || "Not mentioned"}
-- Bounces: ${bounces || "Not mentioned"}
+- Location: ${cityPin}
 
 OPENING MESSAGE (first message as specialist):
 "Hello ${customerName || "there"}! 😊
 
 This is ${specialistName} here.
 
-How are you doing today?
-
 Give me a moment — let me go through your requirement...
 
-Ok! I can see you are looking for ${loanType || "a loan"} in ${cityState}.
+Ok! I can see you are looking for ${loanType || "a loan"} in ${cityPin}.
 
 Let me ask you a few quick questions to find you the best deal!"
 
-PERSONALITY:
-- Warm and genuinely helpful like a personal advisor
-- Knowledgeable — give expert insights naturally
-- Encouraging and positive
-- Never rush customer
-- Show genuine interest
-- Make customer feel they are talking to a real expert
-- When customer shares good details — appreciate genuinely
-- When profile is weak — be empathetic, suggest improvements
+FIELDS YOU MUST COLLECT — ask ONE at a time, IN ANY ORDER that fits the conversation naturally:
+1. Employment type — Salaried or Self-Employed
+2. If Self-Employed ONLY: date/year GST was registered (skip entirely if Salaried)
+3. Approximate CIBIL score (suggest checking on GPay/PaisaBazaar if not sure)
+4. Loan amount required
+5. Any cheque/ECS bounces in last 6 months (get a number, 0 if none)
+6. Any credit enquiries in last 3 months — get the count AND which lender(s) if the customer knows
 
-${questions}
+Do NOT ask about: monthly income, existing EMI amount, company name, work experience, business vintage, property details, co-applicant, or callback timing. None of these are needed.
+
+IMPORTANT — CHECK ELIGIBILITY AS SOON AS CIBIL AND BOUNCES ARE KNOWN:
+Do not keep asking further questions to a lead that already fails eligibility. Evaluate immediately using:
 
 QUALIFICATION CRITERIA:
-Age: Maximum age at LAST EMI = 60 years (no exceptions)
-Income: Above ₹25,000 → proceed | ₹15,000-25,000 → limited options | Below ₹15,000 → decline
-CIBIL PL/BL: Minimum 700 | Below 700 → DECLINE immediately (suggest LAP/HL if property available)
-CIBIL HL/LAP: Minimum 650 | Below 650 → DECLINE immediately | 650-700 → limited lenders proceed with caution
-CIBIL BL: Minimum 700 | Below 700 → DECLINE immediately
-FOIR: Maximum 50% of income for EMIs
-Bounces: 0 → excellent | 1-2 → limited | 3+ → decline
-Work experience (salaried): Minimum 1 year total
-Business vintage (BL): Minimum 3 years
-Salary must be in bank (not cash)
-Credit enquiries PL/BL: 3+ in last month → decline
+- Age: if age > 60, DECLINE immediately (cannot complete standard tenure)
+- CIBIL for Personal Loan / Business Loan: minimum 700 → below 700 DECLINE immediately
+- CIBIL for Home Loan / LAP / Construction Finance: minimum 650 → below 650 DECLINE immediately
+- Bounces for Personal Loan / Business Loan: must be 0 → any bounce DECLINE immediately
+- Bounces for Home Loan / LAP / Construction Finance: max 2 allowed → 3+ DECLINE immediately
+- Enquiries in last 3 months: NO auto-decline — just record the count and lender names, this is shown to the banker, not a rejection trigger
 
-CO-APPLICANT (HL/LAP only):
-- Suggest co-applicant if income low or CIBIL borderline
-- Co-applicant can be spouse, parent, child
-- NOT required for PL/BL
+The moment you receive a CIBIL score or bounce count that fails the above, STOP asking further questions and set qualificationStatus=DECLINED with the decline message below. Do not proceed to remaining fields.
 
-LOAN ELIGIBILITY:
-- PL/BL: Maximum 10-12x monthly income
-- HL/LAP: Maximum 60x monthly income
-- If unrealistic amount → tell customer maximum eligible
+DECLINE MESSAGE (when a criterion fails):
+"[Name] I appreciate you sharing your details! 😊
 
-OVERDUE HANDLING:
-- Overdue on unsecured loan → suggest LAP if property available
+Based on your current profile, [specific reason — low CIBIL / bounces / age].
 
+Here is what I suggest:
+[specific actionable advice — e.g. improve CIBIL over 3-6 months, or maintain clean repayment for 6 months]
 
-CALLBACK SCHEDULING:
-- Simply ask: "What date and time works best for a callback?"
-- Accept whatever customer says ✅
-- Store exactly as customer mentions ✅
-- No need to suggest or confirm dates ✅
+Once your profile improves, we will be delighted to process your application! 😊
+VastMyWealth is always here for you!"
 
-BEFORE CLOSING — ALWAYS ASK:
-"[Name] one last thing — is there anything specific
-you would like our banker to know about your case?
+CLOSING MESSAGE (only once ALL required fields are collected AND qualificationStatus is ELIGIBLE):
+"${customerName || ""} your profile looks really promising! 😊
 
-For example any special circumstances, urgency,
-or previous loan history.
-
-This helps us structure your file for best
-approval chances and avoid unnecessary login
-which could affect your CIBIL! 😊"
-
-Wait for customer response → note it → then proceed to closing message.
-
-CLOSING MESSAGE (after all questions answered + callback scheduled):
-"${customerName || ""}  your profile looks really promising! 😊
-
-${lt.includes("CONSTRUCTION") ? "Construction Finance cases are handled personally by our senior team." : "Based on what you have shared, we have strong lender options in " + cityState + "!"}
+${loanType && loanType.toUpperCase().includes("CONSTRUCTION") ? "Construction Finance cases are handled personally by our senior team." : "Based on what you have shared, we have strong lender options in " + cityPin + "!"}
 
 Here is what happens next:
 
 1️⃣ I am preparing your complete case file right now 📋
 
-2️⃣ Our Banking RM Manoj will personally coordinate with lenders in ${cityState} for you
-
-3️⃣ Your file will be initiated tomorrow itself! ✅
-
-Please save Manoj's number right away:
+2️⃣ Please save our Banking RM Manoj's number right away:
 📱 9594592020 — Manoj (Your Banking RM)
 
-He will call you very soon. 
+3️⃣ He will connect with you very soon — no need to wait for a scheduled call, he'll reach out ASAP! ✅
 
 Looking forward to getting you the best deal! 😊"
 
-DECLINE MESSAGE (if not eligible):
-"[Name] I appreciate you sharing your details! 😊
-
-Based on your current profile, [specific reason].
-
-Here is what I suggest:
-[specific actionable advice]
-
-Once your profile improves, we will be delighted to process your application! 😊
-VastMyWealth is always here for you!"
+PERSONALITY:
+- Warm and genuinely helpful like a personal advisor
+- Never rush customer, but never linger on a lead that already fails eligibility
+- When profile is weak — be empathetic, suggest improvements
 
 STRICT RULES:
 - NEVER repeat a question already answered
-- ALWAYS check what Priya already collected (name, loan type, city, state)
-- NEVER ask for name, loan type, city again — already collected!
+- NEVER ask for name, age, loan type, city again — already collected by Priya!
 - Ask ONE question at a time
 - NEVER give exact interest rates — say depends on profile
 - NEVER guarantee approval
 - NEVER use: guaranteed, pakka, 100% sure, definitely
-- NEVER mention Banking Portal
-- NEVER ask for documents — just qualify
-- NEVER give phone number except in closing message
+- NEVER ask for documents
+- NEVER give Manoj's phone number except in the closing message
 - Final decision always by lender
 
 LANGUAGE RULES:
@@ -346,37 +220,26 @@ LANGUAGE RULES:
 RESPONSE FORMAT — Always respond in this exact JSON only:
 {
   "message": "your response to customer",
-  "customerName": "name or null",
-  "loanType": "loan type or null",
-  "city": "city or null",
-  "state": "state or null",
   "employmentType": "Salaried or Self-Employed or null",
-  "monthlyIncome": "income if mentioned or null",
+  "gstDate": "GST registration date/year if self-employed, else null",
   "cibilScore": "CIBIL if mentioned or null",
-  "existingEMI": "EMI amount if mentioned or null",
-  "bounces": "bounce count if mentioned or null",
   "loanAmount": "amount if mentioned or null",
-  "companyName": "company/business if mentioned or null",
-  "workExperience": "experience if mentioned or null",
-  "businessVintage": "vintage if mentioned or null",
-  "propertyDetails": "property details if mentioned or null",
-  "coApplicant": "co-applicant details if mentioned or null",
-  "callbackDate": null,
-  "callbackTime": null,
+  "bounces": "bounce count if mentioned or null",
+  "enquiries": "enquiry count in last 3 months if mentioned or null",
+  "enquiryLenders": "lender name(s) for those enquiries if mentioned or null",
   "qualificationStatus": "ELIGIBLE or DECLINED or IN_PROGRESS",
   "sendCaseSummary": true or false
 }
 
 Set sendCaseSummary=true ONLY when:
-- ALL questions answered ✅
-- Callback date AND time confirmed ✅
+- employmentType, (gstDate if self-employed), cibilScore, loanAmount, bounces, enquiries are ALL collected ✅
 - qualificationStatus is ELIGIBLE ✅
-- NEVER set true before all questions answered
-- NEVER set true before callback scheduled`;
+- NEVER set true before all required fields answered
+- NEVER set true if qualificationStatus is DECLINED`;
 }
 
 // ============================================================
-// PARTNER PROMPT
+// PARTNER PROMPT (unchanged)
 // ============================================================
 const PARTNER_PROMPT = `You are Rahul — Senior Loan Advisor at VastMyWealth Advisory.
 
@@ -475,83 +338,110 @@ function getTimeGreeting() {
 }
 
 // ============================================================
-// TRIGGER CASE SUMMARY
+// STRICT ELIGIBILITY CHECK — shared by Priya-level and specialist-level
+// Called as soon as we have enough info to make a call. Returns
+// "" if no decision yet / eligible so far, or a reject reason code.
+// ============================================================
+function checkRejection(session) {
+  const loanType = (session.loanType || "").toLowerCase();
+  const isPLBL    = loanType.indexOf("personal") !== -1 || loanType.indexOf("business") !== -1;
+  const age       = parseInt(session.customerAge || "0") || 0;
+  const cibil     = parseInt((session.cibilScore || "0").toString().replace(/[^0-9]/g, "")) || 0;
+  const bounces   = session.bounces === null || session.bounces === undefined ? -1 : parseInt(session.bounces) || 0;
+
+  if (age > 60) return "age";
+
+  if (cibil > 0) {
+    if (isPLBL && cibil < 700) return "cibil_plbl";
+    if (!isPLBL && cibil < 650) return "cibil_other";
+  }
+
+  if (bounces >= 0) {
+    if (isPLBL && bounces > 0) return "bounces_plbl";
+    if (!isPLBL && bounces > 2) return "bounces_other";
+  }
+
+  return "";
+}
+
+function rejectMessageFor(reason) {
+  const messages = {
+    age          : "Thank you for sharing! 🙏\n\nUnfortunately for this loan type, the maximum age at last EMI is 60 years, which your current age does not allow for a standard tenure.\n\nDo reach out to us if a co-applicant with suitable age is available, or for other options in future! 😊\n\n*VastMyWealth Advisory*",
+    cibil_plbl   : "Thank you for sharing! 🙏\n\nFor a Personal/Business Loan, a minimum CIBIL score of 700 is required.\n\n*To improve your score:*\n→ Clear all overdue EMIs ✅\n→ Avoid new credit applications ✅\n→ Maintain 0 bounces for 6 months ✅\n→ Keep credit utilization below 30% ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*",
+    cibil_other  : "Thank you for sharing! 🙏\n\nFor this loan type, a minimum CIBIL score of 650 is required.\n\n*To improve your score:*\n→ Clear all overdue payments ✅\n→ Maintain regular EMI payments ✅\n→ Avoid multiple loan applications ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*",
+    bounces_plbl : "Thank you for sharing! 🙏\n\nFor a Personal/Business Loan, a clean repayment track record with zero bounces is required.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Ensure sufficient balance on EMI dates ✅\n→ Clear any pending dues ✅\n\nPlease contact us after 6 months of clean history! 😊\n\n*VastMyWealth Advisory*",
+    bounces_other: "Thank you for sharing! 🙏\n\nYour account shows more than 2 bounces which affects loan eligibility.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Clear all pending dues ✅\n→ Ensure sufficient balance on EMI dates ✅\n\nPlease contact us after improving your repayment history! 😊\n\n*VastMyWealth Advisory*"
+  };
+  return messages[reason] || "Thank you for sharing! 🙏\n\nBased on your current profile we are unable to proceed at this time. We will be happy to assist you once your profile improves! 😊\n\n*VastMyWealth Advisory*";
+}
+
+// ============================================================
+// TRIGGER CASE SUMMARY — direct, no AI analyzer
 // ============================================================
 async function triggerCaseSummary(session, from) {
   try {
-    console.log("Triggering case summary for: " + from);
+    console.log("Sending case brief for: " + from);
+
+    const briefText =
+      "CASE BRIEF\n" +
+      "Name: " + (session.name || "-") + "\n" +
+      "Age: " + (session.customerAge || "-") + "\n" +
+      "Employment: " + (session.employmentType || "-") + "\n" +
+      (session.employmentType === "Self-Employed" ? "GST Registered: " + (session.gstDate || "-") + "\n" : "") +
+      "City / Pincode: " + (session.city || "-") + " / " + (session.pincode || "-") + "\n" +
+      "CIBIL: " + (session.cibilScore || "-") + "\n" +
+      "Loan Type: " + (session.loanType || "-") + "\n" +
+      "Loan Amount: " + (session.loanAmount || "-") + "\n" +
+      "Bounces (6 mo): " + (session.bounces != null ? session.bounces : "-") + "\n" +
+      "Enquiries (3 mo): " + (session.enquiries != null ? session.enquiries : "-") +
+      (session.enquiryLenders ? " (" + session.enquiryLenders + ")" : "");
 
     const payload = {
-      action          : "case-summary",
-      mobile          : from,
-      name            : session.name            || "",
-      age             : session.customerAge     || "",
-      loanType        : session.loanType        || "",
-      loanAmount      : session.loanAmount      || "",
-      city            : session.city            || "",
-      state           : session.state           || "",
-      employmentType  : session.employmentType  || "",
-      monthlyIncome   : session.monthlyIncome   || "",
-      cibilScore      : session.cibilScore      || "",
-      existingEMI     : session.existingEMI     || "",
-      bounces         : session.bounces         || "",
-      companyName     : session.companyName     || "",
-      workExperience  : session.workExperience  || "",
-      businessVintage : session.businessVintage || "",
-      propertyDetails : session.propertyDetails || "",
-      coApplicant     : session.coApplicant     || "",
-      callbackDate    : session.callbackDate    || "",
-      callbackTime    : session.callbackTime    || "",
-      specialistName  : session.specialistName  || "",
-      partnerCode     : session.partnerCode     || "",
-      isPartnerCase   : session.partnerMode     || false,
-      conversationSummary: session.messages.slice(-15).map(m => m.role + ": " + m.content).join("\n")
+      action         : "case-summary",
+      mobile         : from,
+      name           : session.name           || "",
+      age            : session.customerAge    || "",
+      employmentType : session.employmentType || "",
+      gstDate        : session.gstDate        || "",
+      loanType       : session.loanType       || "",
+      loanAmount     : session.loanAmount     || "",
+      city           : session.city           || "",
+      pincode        : session.pincode        || "",
+      cibilScore     : session.cibilScore     || "",
+      bounces        : session.bounces        != null ? session.bounces : "",
+      enquiries      : session.enquiries      != null ? session.enquiries : "",
+      enquiryLenders : session.enquiryLenders || "",
+      specialistName : session.specialistName || "",
+      partnerCode    : session.partnerCode    || "",
+      isPartnerCase  : session.partnerMode    || false,
+      caseBrief      : briefText
     };
 
-    // Save callback time + create Google Calendar event
-    if (session.callbackDate && session.callbackTime) {
-      fetch(process.env.APPS_SCRIPT_URL +
-        "?action=saveCallback" +
-        "&mobile="       + encodeURIComponent(from) +
-        "&callbackDate=" + encodeURIComponent(session.callbackDate) +
-        "&callbackTime=" + encodeURIComponent(session.callbackTime) +
-        "&name="         + encodeURIComponent(session.name     || "") +
-        "&loanType="     + encodeURIComponent(session.loanType || "")
-      ).catch(e => console.error("saveCallback error:", e.message));
-    }
-
-    // Save all lead data to WA Leads
+    // Save all lead data directly — no AI analyzer step
     fetch(process.env.APPS_SCRIPT_URL +
       "?action=saveLeadData" +
       "&mobile="         + encodeURIComponent(from) +
       "&partnerMobile="  + encodeURIComponent(session.partnerCode    || "") +
-      "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
       "&age="            + encodeURIComponent(session.customerAge    || "") +
       "&employmentType=" + encodeURIComponent(session.employmentType || "") +
-      "&monthlyIncome="  + encodeURIComponent(session.monthlyIncome  || "") +
+      "&gstDate="        + encodeURIComponent(session.gstDate        || "") +
+      "&pincode="        + encodeURIComponent(session.pincode        || "") +
       "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
-      "&existingEMI="    + encodeURIComponent(session.existingEMI    || "") +
-      "&bounces="        + encodeURIComponent(session.bounces        || "") +
-      "&caseSummary=Generated"
+      "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
+      "&bounces="        + encodeURIComponent(session.bounces != null ? session.bounces : "") +
+      "&enquiries="      + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
+      "&enquiryLenders=" + encodeURIComponent(session.enquiryLenders || "") +
+      "&caseSummary="    + encodeURIComponent(briefText)
     ).catch(e => console.error("saveLeadData error:", e.message));
-// Update broadcast sheet if broadcast lead
-if (session.isBroadcastLead) {
-  fetch(process.env.APPS_SCRIPT_URL +
-    "?action=updateBroadcastBrief&mobile=" + encodeURIComponent(from)
-  ).catch(e => console.error("updateBroadcastBrief error:", e.message));
-}
 
-    // Wake up analyzer first to prevent sleeping issue
-    try { await fetch(RENDER_URL + "/"); } catch(e) {}
-    await new Promise(r => setTimeout(r, 2000));
+    // Update broadcast sheet if broadcast lead
+    if (session.isBroadcastLead) {
+      fetch(process.env.APPS_SCRIPT_URL +
+        "?action=updateBroadcastBrief&mobile=" + encodeURIComponent(from)
+      ).catch(e => console.error("updateBroadcastBrief error:", e.message));
+    }
 
-    fetch(RENDER_URL + "/case-summary", {
-      method : "POST",
-      headers: { "Content-Type": "application/json" },
-      body   : JSON.stringify(payload)
-    }).catch(e => console.error("triggerCaseSummary fetch error:", e.message));
-
-    console.log("✅ Case summary triggered for: " + from);
+    console.log("✅ Case brief saved for: " + from);
   } catch(e) {
     console.error("triggerCaseSummary error:", e.message);
   }
@@ -569,7 +459,7 @@ async function saveLeadToSheet(mobile, name, loanType, city, status) {
       "&name="     + encodeURIComponent(name     || "") +
       "&loanType=" + encodeURIComponent(loanType || "") +
       "&city="     + encodeURIComponent(city     || "") +
-      "&state="    + encodeURIComponent("");
+      "&status="   + encodeURIComponent(status   || "");
     await fetch(url);
   } catch(e) {
     console.error("saveLeadToSheet error:", e.message);
@@ -582,8 +472,6 @@ async function saveLeadToSheet(mobile, name, loanType, city, status) {
 async function storeInAppsScript(mobile, message) {
   try {
     if (!process.env.APPS_SCRIPT_URL) return;
-    // Only store mobile — message is saved in Conversations tab separately
-    // Do NOT send message to storeMessage as it corrupts WA Leads columns
     const url = process.env.APPS_SCRIPT_URL +
       "?action=storeMessage" +
       "&mobile=" + encodeURIComponent(mobile);
@@ -690,21 +578,6 @@ async function callClaude(userMessage, history, systemPrompt) {
 }
 
 // ============================================================
-// CHECK IF ALREADY PROCESSED
-// ============================================================
-async function isTemplateAlreadySent(mobile) {
-  try {
-    if (!process.env.APPS_SCRIPT_URL) return false;
-    const url  = process.env.APPS_SCRIPT_URL + "?mobile=" + encodeURIComponent(mobile);
-    const res  = await fetch(url);
-    const data = await res.json();
-    return data.filled === true;
-  } catch(e) {
-    return false;
-  }
-}
-
-// ============================================================
 // CHECK PARTNER STATUS
 // ============================================================
 async function checkPartnerStatus(mobile) {
@@ -719,6 +592,36 @@ async function checkPartnerStatus(mobile) {
     console.error("checkPartnerStatus error:", e.message);
     return { found: false, approved: false };
   }
+}
+
+// ============================================================
+// FRESH SESSION OBJECT
+// ============================================================
+function newSession(overrides) {
+  const base = {
+    layer          : "priya",
+    specialistName : null,
+    messages       : [],
+    priyaMessages  : [],
+    msgCount       : 0,
+    name           : null,
+    customerAge    : null,
+    loanType       : null,
+    loanAmount     : null,
+    city           : null,
+    pincode        : null,
+    employmentType : null,
+    gstDate        : null,
+    cibilScore     : null,
+    bounces        : null,
+    enquiries      : null,
+    enquiryLenders : null,
+    partnerMode    : false,
+    partnerCode    : null,
+    caseSummarySent: false,
+    greeting       : getTimeGreeting()
+  };
+  return Object.assign(base, overrides || {});
 }
 
 // ============================================================
@@ -765,7 +668,6 @@ app.post("/webhook", async function(req, res) {
              (message.interactive && message.interactive.list_reply &&
               message.interactive.list_reply.title) || "Chat";
     } else {
-      // For images/documents — acknowledge but don't process
       await sendTextMessage(from, "Thank you for sharing! 😊 Our team will review this.\n\nIf you have any questions please feel free to ask!");
       return;
     }
@@ -780,21 +682,18 @@ app.post("/webhook", async function(req, res) {
 
     console.log("Incoming from " + from + ": " + text.substring(0, 50));
 
-    // Store message
     await storeInAppsScript(from, text);
-// Check if QR lead (VMWREF prefix)
+
+    // Check if QR lead (VMWREF prefix)
     if (text.toUpperCase().startsWith("VMWREF:") && !conversations[from]) {
       try {
-        // Parse: VMWREF:Name|LoanType|City|PartnerCode
-        var ref     = text.substring(7); // Remove "VMWREF:"
+        var ref     = text.substring(7);
         var parts   = ref.split("|");
         var refName = parts[0] || "";
         var refLoan = parts[1] || "Personal Loan";
         var refCity = parts[2] || "";
         var refCode = parts[3] || "";
 
-
-        // Save to WA Leads via Apps Script
         fetch(process.env.APPS_SCRIPT_URL +
           "?action=saveQRLead" +
           "&mobile="         + encodeURIComponent(from) +
@@ -804,74 +703,46 @@ app.post("/webhook", async function(req, res) {
           "&partnerMobile="  + encodeURIComponent(refCode)
         ).catch(function(){});
 
-
-        // Pre-load session — skip Priya!
-        conversations[from] = {
+        conversations[from] = newSession({
           layer          : "specialist",
           specialistName : getSpecialistName(refLoan),
-          messages       : [],
-          priyaMessages  : [],
-          msgCount       : 0,
           name           : refName,
-          customerAge    : null,
           loanType       : refLoan,
-          loanAmount     : null,
           city           : refCity,
-          state          : null,
-          employmentType : null,
-          monthlyIncome  : null,
-          cibilScore     : null,
-          existingEMI    : null,
-          bounces        : null,
-          companyName    : null,
-          workExperience : null,
-          businessVintage: null,
-          propertyDetails: null,
-          coApplicant    : null,
-          callbackDate   : null,
-          callbackTime   : null,
           partnerMode    : true,
           partnerCode    : refCode,
-          caseSummarySent: false,
           isQRLead       : true
-        };
+        });
         console.log("✅ QR Lead loaded: " + from + " | " + refName + " | " + refLoan);
       } catch(e) {
         console.error("QR lead error:", e.message);
       }
     }
 
-    // Check if partner lead exists for this customer
     // Check if broadcast lead (GST data) exists
-if (!conversations[from]) {
-  try {
-    const brRes  = await fetch(process.env.APPS_SCRIPT_URL +
-      "?action=getBroadcastLead&mobile=" + encodeURIComponent(from));
-    const brData = await brRes.json();
-    if (brData.success && brData.lead) {
-      const bl = brData.lead;
-      conversations[from] = {
-        layer:"specialist", specialistName:"Vikram",
-        messages:[], priyaMessages:[], msgCount:0,
-        name:bl.companyName, customerAge:null,
-        loanType:"Business Loan", loanAmount:null,
-        city:bl.city, state:"Maharashtra",
-        employmentType:"Self-Employed",
-        monthlyIncome:null, cibilScore:null,
-        existingEMI:null, bounces:null,
-        companyName:bl.companyName, workExperience:null,
-        businessVintage:null, propertyDetails:null,
-        coApplicant:null, callbackDate:null,
-        callbackTime:null, partnerMode:false,
-        partnerCode:null, caseSummarySent:false,
-        isBroadcastLead:true, gstNo:bl.gst
-      };
-      fetch(process.env.APPS_SCRIPT_URL +
-        "?action=updateBroadcastReply&mobile=" + encodeURIComponent(from)
-      ).catch(function(){});
+    if (!conversations[from]) {
+      try {
+        const brRes  = await fetch(process.env.APPS_SCRIPT_URL +
+          "?action=getBroadcastLead&mobile=" + encodeURIComponent(from));
+        const brData = await brRes.json();
+        if (brData.success && brData.lead) {
+          const bl = brData.lead;
+          conversations[from] = newSession({
+            layer           : "specialist",
+            specialistName  : "Vikram",
+            name            : bl.companyName,
+            loanType        : "Business Loan",
+            city            : bl.city,
+            employmentType  : "Self-Employed",
+            gstDate         : bl.gst || null,
+            isBroadcastLead : true
+          });
+          fetch(process.env.APPS_SCRIPT_URL +
+            "?action=updateBroadcastReply&mobile=" + encodeURIComponent(from)
+          ).catch(function(){});
+        }
+      } catch(e) { console.error("Broadcast check error:", e.message); }
     }
-  } catch(e) { console.error("Broadcast check error:", e.message); }
-}
 
     if (!conversations[from] && text.toUpperCase().includes("START APPLICATION")) {
       try {
@@ -880,35 +751,17 @@ if (!conversations[from]) {
         const plData = await plRes.json();
         if (plData.success && plData.lead) {
           const pl = plData.lead;
-          conversations[from] = {
+          conversations[from] = newSession({
             layer          : "specialist",
             specialistName : getSpecialistName(pl.loanType),
-            messages       : [],
-            priyaMessages  : [],
-            msgCount       : 0,
             name           : pl.customerName,
-            customerAge    : null,
             loanType       : pl.loanType,
             loanAmount     : pl.loanAmount,
             city           : pl.city,
-            state          : pl.state,
             partnerMode    : true,
             partnerCode    : pl.partnerMobile,
-            isPartnerLead  : true,
-            caseSummarySent: false,
-            employmentType : null,
-            monthlyIncome  : null,
-            cibilScore     : null,
-            existingEMI    : null,
-            bounces        : null,
-            companyName    : null,
-            workExperience : null,
-            businessVintage: null,
-            propertyDetails: null,
-            coApplicant    : null,
-            callbackDate   : null,
-            callbackTime   : null
-          };
+            isPartnerLead  : true
+          });
           console.log("✅ Partner lead loaded: " + from + " | " + pl.loanType);
         }
       } catch(e) {
@@ -918,35 +771,7 @@ if (!conversations[from]) {
 
     // Initialize session
     if (!conversations[from]) {
-      conversations[from] = {
-        layer           : "priya",    // Start with Priya
-        specialistName  : null,
-        messages        : [],
-        priyaMessages   : [],
-        msgCount        : 0,
-        name            : null,
-        customerAge     : null,
-        loanType        : null,
-        loanAmount      : null,
-        city            : null,
-        state           : null,
-        employmentType  : null,
-        monthlyIncome   : null,
-        cibilScore      : null,
-        existingEMI     : null,
-        bounces         : null,
-        companyName     : null,
-        workExperience  : null,
-        businessVintage : null,
-        propertyDetails : null,
-        coApplicant     : null,
-        callbackDate    : null,
-        callbackTime    : null,
-        partnerMode     : false,
-        partnerCode     : null,
-        caseSummarySent : false,
-        greeting        : getTimeGreeting()
-      };
+      conversations[from] = newSession();
     }
 
     const session = conversations[from];
@@ -954,14 +779,15 @@ if (!conversations[from]) {
 
     // ── CASE ALREADY DONE ────────────────────────────────
     if (session.caseSummarySent) {
-      await sendTextMessage(from, "Hi! 😊 Your case is already with our team.\n\nOur Banking RM Manoj will connect with you on the scheduled date and time.\n\nFor any urgent queries feel free to message here!");
+      await sendTextMessage(from, "Hi! 😊 Your case is already with our team.\n\nOur Banking RM Manoj will connect with you shortly.\n\nFor any urgent queries feel free to message here!");
       return;
     }
 
     // ── PARTNER LOGIN ────────────────────────────────────
     if (text.toUpperCase() === "PARTNER LOGIN") {
-      session.layer       = "partner";
-      session.partnerMode = true;
+      session.layer               = "partner";
+      session.partnerMode         = true;
+      session.awaitingPartnerMobile = true;
       await sendTextMessage(from, "Welcome to VastMyWealth Partner Portal! 😊\n\nPlease share your registered mobile number to login.");
       return;
     }
@@ -996,17 +822,14 @@ if (!conversations[from]) {
       systemPrompt   = PARTNER_PROMPT;
       currentHistory = session.messages;
     } else {
-      // Specialist layer
       systemPrompt = getSpecialistPrompt(
         session.specialistName,
         session.loanType,
         session.name,
         session.city,
-        session.state,
-        session.cibilScore,
-        session.bounces
+        session.pincode,
+        session.customerAge
       );
-
       currentHistory = session.messages;
     }
 
@@ -1021,7 +844,7 @@ if (!conversations[from]) {
 
     // Update history
     currentHistory.push({ role: "user",      content: text });
-    currentHistory.push({ role: "assistant",  content: JSON.stringify(botResponse) });
+    currentHistory.push({ role: "assistant", content: JSON.stringify(botResponse) });
     if (currentHistory.length > 20) {
       const keep = currentHistory.slice(-20);
       if (session.layer === "priya") session.priyaMessages = keep;
@@ -1029,30 +852,36 @@ if (!conversations[from]) {
     }
 
     // Extract data
-    if (botResponse.customerName)    session.name            = botResponse.customerName;
-    if (botResponse.customerAge)     session.customerAge     = botResponse.customerAge;
-    if (botResponse.loanType)        session.loanType        = botResponse.loanType;
-    if (botResponse.loanAmount)      session.loanAmount      = botResponse.loanAmount;
-    if (botResponse.city)            session.city            = botResponse.city;
-    if (botResponse.state)           session.state           = botResponse.state;
-    if (botResponse.employmentType)  session.employmentType  = botResponse.employmentType;
-    if (botResponse.monthlyIncome)   session.monthlyIncome   = botResponse.monthlyIncome;
-    if (botResponse.cibilScore)      session.cibilScore      = botResponse.cibilScore;
-    if (botResponse.existingEMI)     session.existingEMI     = botResponse.existingEMI;
-    if (botResponse.bounces)         session.bounces         = botResponse.bounces;
-    if (botResponse.companyName)     session.companyName     = botResponse.companyName;
-    if (botResponse.workExperience)  session.workExperience  = botResponse.workExperience;
-    if (botResponse.businessVintage) session.businessVintage = botResponse.businessVintage;
-    if (botResponse.propertyDetails) session.propertyDetails = botResponse.propertyDetails;
-    if (botResponse.coApplicant)     session.coApplicant     = botResponse.coApplicant;
-    if (botResponse.callbackDate)    session.callbackDate    = botResponse.callbackDate;
-    if (botResponse.callbackTime)    session.callbackTime    = botResponse.callbackTime;
+    if (botResponse.customerName)    session.name           = botResponse.customerName;
+    if (botResponse.customerAge)     session.customerAge    = botResponse.customerAge;
+    if (botResponse.loanType)        session.loanType       = botResponse.loanType;
+    if (botResponse.loanAmount)      session.loanAmount     = botResponse.loanAmount;
+    if (botResponse.city)            session.city           = botResponse.city;
+    if (botResponse.pincode)         session.pincode        = botResponse.pincode;
+    if (botResponse.employmentType)  session.employmentType = botResponse.employmentType;
+    if (botResponse.gstDate)         session.gstDate        = botResponse.gstDate;
+    if (botResponse.cibilScore)      session.cibilScore     = botResponse.cibilScore;
+    if (botResponse.bounces !== undefined && botResponse.bounces !== null) session.bounces = botResponse.bounces;
+    if (botResponse.enquiries !== undefined && botResponse.enquiries !== null) session.enquiries = botResponse.enquiries;
+    if (botResponse.enquiryLenders)  session.enquiryLenders = botResponse.enquiryLenders;
 
     // Save conversation
     saveConversation(from, "customer", text);
     saveConversation(from, "bot", botResponse.message);
 
-    // Send reply
+    // ── STRICT REJECTION CHECK — as soon as we have enough info ──
+    // Runs for both Priya and specialist layers, the instant age/CIBIL/bounces land.
+    if (session.layer !== "partner") {
+      const rejectReason = checkRejection(session);
+      if (rejectReason) {
+        await sendTextMessage(from, rejectMessageFor(rejectReason));
+        await saveLeadToSheet(from, session.name, session.loanType, session.city, "Rejected - Auto");
+        delete conversations[from];
+        return;
+      }
+    }
+
+    // Send reply (only if not rejected above)
     if (botResponse.message) {
       await sendTextMessage(from, botResponse.message);
     }
@@ -1060,75 +889,22 @@ if (!conversations[from]) {
     // ── PRIYA TRANSFERS TO SPECIALIST ────────────────────
     if (session.layer === "priya" && botResponse.transferToSpecialist && botResponse.specialistName) {
 
-      // ── EARLY REJECTION AT PRIYA LEVEL ───────────────
-      const earlyLoanType = (session.loanType||"").toLowerCase();
-      const earlyCibil = parseInt((session.cibilScore||"0").replace(/[^0-9]/g,""))||0;
-
-      const earlyBounces  = parseInt(session.bounces||0);
-      const earlyIsPLBL   = earlyLoanType.indexOf("personal")!==-1 || 
-                            earlyLoanType.indexOf("business")!==-1;
-
-      let earlyReject = "";
-
-      if (earlyCibil > 0) {
-        if (earlyIsPLBL) {
-          if (earlyCibil < 680)  earlyReject = "cibil_plbl";
-          if (earlyBounces > 0)  earlyReject = "bounces_plbl";
-        } else {
-          if (earlyCibil < 650)  earlyReject = "cibil_other";
-          if (earlyBounces > 2)  earlyReject = "bounces_other";
-        }
-      }
-
-      if (earlyReject) {
-        let earlyMsg = "";
-
-        if (earlyReject === "cibil_plbl") {
-          earlyMsg = "Thank you for sharing! 🙏\n\nFor a Personal/Business Loan, a minimum CIBIL score of 680 is required.\n\n*To improve your score:*\n→ Clear all overdue EMIs ✅\n→ Avoid new credit applications ✅\n→ Maintain 0 bounces for 6 months ✅\n→ Keep credit utilization below 30% ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
-        }
-        else if (earlyReject === "bounces_plbl") {
-          earlyMsg = "Thank you for sharing! 🙏\n\nFor a Personal/Business Loan, a clean repayment track record with no bounces is required.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Ensure sufficient balance on EMI dates ✅\n→ Clear any pending dues ✅\n\nPlease contact us after 6 months of clean history! 😊\n\n*VastMyWealth Advisory*";
-        }
-        else if (earlyReject === "cibil_other") {
-          earlyMsg = "Thank you for sharing! 🙏\n\nFor this loan type, a minimum CIBIL score of 650 is required.\n\n*To improve your score:*\n→ Clear all overdue payments ✅\n→ Maintain regular EMI payments ✅\n→ Avoid multiple loan applications ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
-        }
-        else if (earlyReject === "bounces_other") {
-          earlyMsg = "Thank you for sharing! 🙏\n\nYour account shows more than 2 bounces which affects loan eligibility.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Clear all pending dues ✅\n→ Ensure sufficient balance on EMI dates ✅\n\nPlease contact us after improving your repayment history! 😊\n\n*VastMyWealth Advisory*";
-        }
-
-        // Send rejection
-        await sendTextMessage(from, earlyMsg);
-
-        // Save as rejected
-        await saveLeadToSheet(from, session.name, session.loanType,
-                              session.city, "Rejected - Auto");
-
-        // Clear session
-        delete conversations[from];
-        return;
-      }
-
-      // ── NO REJECTION — PROCEED TO SPECIALIST ─────────
       session.layer          = "specialist";
       session.specialistName = botResponse.specialistName;
       session.messages       = []; // Fresh history for specialist
 
       console.log("Transferring " + from + " to " + botResponse.specialistName);
 
-      // Small delay then specialist introduces
       await new Promise(r => setTimeout(r, 2000));
 
       const specPrompt = getSpecialistPrompt(
-
         botResponse.specialistName,
         session.loanType,
         session.name,
         session.city,
-        session.state,
-        session.cibilScore,
-        session.bounces
+        session.pincode,
+        session.customerAge
       );
-
 
       const introResponse = await callClaude(
         "START — introduce yourself to the customer as the specialist",
@@ -1141,90 +917,32 @@ if (!conversations[from]) {
         session.messages.push({ role: "assistant", content: JSON.stringify(introResponse) });
       }
 
-      // Save lead
       await saveLeadToSheet(from, session.name, session.loanType, session.city, "Qualifying");
       return;
     }
 
     // ── TRIGGER CASE SUMMARY ─────────────────────────────
-    if (botResponse.sendCaseSummary && !session.caseSummarySent) {
-      const hasMinInfo = session.name && session.loanType &&
-                         session.city && session.monthlyIncome;
+    if (botResponse.sendCaseSummary && !session.caseSummarySent &&
+        botResponse.qualificationStatus === "ELIGIBLE") {
+
+      const hasMinInfo = session.name && session.loanType && session.city &&
+                         session.employmentType && session.cibilScore &&
+                         session.loanAmount && session.bounces !== null &&
+                         session.enquiries !== null &&
+                         (session.employmentType !== "Self-Employed" || session.gstDate);
 
       if (hasMinInfo) {
-
-        // ── REJECTION FILTERS ─────────────────────────────
-        const loanType = (session.loanType||"").toLowerCase();
-        const cibil    = parseInt(session.cibilScore||0);
-        const bounces  = parseInt(session.bounces||0);
-        const income   = parseFloat(session.monthlyIncome||0);
-        const emis     = parseFloat(session.existingEMI||0);
-        const foir     = income > 0 ? (emis/income)*100 : 0;
-        const isPLBL   = loanType.indexOf("personal")!==-1 || 
-                         loanType.indexOf("business")!==-1;
-
-        let rejectReason = "";
-
-        // FOIR check — all loan types
-        if (foir > 70) {
-          rejectReason = "foir";
-        }
-        // PL/BL checks
-        else if (isPLBL) {
-          if (cibil < 680) rejectReason = "cibil_plbl";
-          else if (bounces > 0) rejectReason = "bounces_plbl";
-        }
-        // Other loans HL/LAP/CF/BT
-        else {
-          if (cibil < 650) rejectReason = "cibil_other";
-          else if (bounces > 2) rejectReason = "bounces_other";
-        }
-
-        // ── SEND REJECTION MESSAGE ────────────────────────
-        if (rejectReason) {
-          let rejectMsg = "";
-
-          if (rejectReason === "foir") {
-            rejectMsg = "Thank you for sharing your details! 🙏\n\nBased on your profile, your current EMI obligations are high (above 70% of your income).\n\n*Our suggestion:*\n→ Try to close or reduce existing EMIs ✅\n→ Increase income sources if possible ✅\n→ Reapply once EMIs reduce ✅\n\nWe will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
-          }
-          else if (rejectReason === "cibil_plbl") {
-            rejectMsg = "Thank you for your interest! 🙏\n\nFor a Personal/Business Loan, a minimum CIBIL score of 680 is required.\n\n*To improve your score:*\n→ Clear all overdue EMIs ✅\n→ Avoid new credit applications ✅\n→ Maintain 0 bounces for 6 months ✅\n→ Keep credit utilization below 30% ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
-          }
-          else if (rejectReason === "bounces_plbl") {
-            rejectMsg = "Thank you for your interest! 🙏\n\nFor a Personal/Business Loan, a clean repayment track record with no bounces is required.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Ensure sufficient balance on EMI dates ✅\n→ Clear any pending dues ✅\n\nPlease contact us after 6 months of clean history! 😊\n\n*VastMyWealth Advisory*";
-          }
-          else if (rejectReason === "cibil_other") {
-            rejectMsg = "Thank you for your interest! 🙏\n\nFor this loan type, a minimum CIBIL score of 650 is required.\n\n*To improve your score:*\n→ Clear all overdue payments ✅\n→ Maintain regular EMI payments ✅\n→ Avoid multiple loan applications ✅\n\nYour score should improve in 3-6 months. We will be happy to assist you then! 😊\n\n*VastMyWealth Advisory*";
-          }
-          else if (rejectReason === "bounces_other") {
-            rejectMsg = "Thank you for your interest! 🙏\n\nYour account shows more than 2 bounces which affects loan eligibility.\n\n*Our suggestion:*\n→ Maintain clean account for 6 months ✅\n→ Clear all pending dues ✅\n→ Ensure sufficient balance on EMI dates ✅\n\nPlease contact us after improving your repayment history! 😊\n\n*VastMyWealth Advisory*";
-          }
-
-          // Send rejection message to customer
-          await sendTextMessage(from, rejectMsg);
-
-
-          // Save as rejected in sheet
-          await saveLeadToSheet(from, session.name, session.loanType, 
-                                session.city, "Rejected - Auto");
-
-          // Clear session
-          delete conversations[from];
-          return;
-        }
-
-        // ── NO REJECTION — PROCEED WITH CASE BRIEF ───────
         session.caseSummarySent = true;
-        console.log("Case summary triggered for: " + from);
-        await saveLeadToSheet(from, session.name, session.loanType, 
-                              session.city, "Case Ready");
+        console.log("Case brief ready for: " + from);
+        await saveLeadToSheet(from, session.name, session.loanType, session.city, "Case Ready");
         await triggerCaseSummary(session, from);
       }
     }
 
-    // ── HANDLE DECLINED ──────────────────────────────────
+    // ── HANDLE DECLINED (specialist explicitly declined mid-flow) ───
     if (botResponse.qualificationStatus === "DECLINED") {
       await saveLeadToSheet(from, session.name, session.loanType, session.city, "Declined");
+      delete conversations[from];
     }
 
   } catch(err) {
@@ -1237,8 +955,8 @@ if (!conversations[from]) {
 // ============================================================
 app.get("/", function(req, res) {
   res.json({
-    status : "VastMyWealth Relay v7 — Priya + Specialists Active",
-    version: "v7",
+    status : "VastMyWealth Relay v8 — Priya + Specialists, direct case brief (no AI analyzer)",
+    version: "v8",
     time   : new Date().toISOString()
   });
 });
@@ -1248,6 +966,6 @@ app.get("/", function(req, res) {
 // ============================================================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, function() {
-  console.log("🚀 VastMyWealth Relay v7 running on port " + PORT);
+  console.log("🚀 VastMyWealth Relay v8 running on port " + PORT);
 });
 
