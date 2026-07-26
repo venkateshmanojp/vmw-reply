@@ -860,12 +860,11 @@ app.post("/webhook", async function(req, res) {
     if (session.awaitingPortalChoice) {
       session.awaitingPortalChoice = false;
       const choice = text.toLowerCase();
-      const wantsExpedite = choice.indexOf("expedite") !== -1 || choice.indexOf("⚡") !== -1;
+      const wantsContinue = choice.indexOf("continue") !== -1 || choice.indexOf("✅") !== -1;
 
-      if (wantsExpedite) {
-        const trackedLink = process.env.APPS_SCRIPT_URL + "?action=portalClick&mobile=" + encodeURIComponent(from);
+      if (wantsContinue) {
         await sendTextMessage(from,
-          "Great! 😊 Upload your documents here to expedite processing:\n" + trackedLink +
+          "Great! 😊 Continue your application here:\nhttps://loan.vastmywealth.com" +
           "\n\nOnce done, our team will review and proceed right away!"
         );
       } else {
@@ -873,6 +872,7 @@ app.post("/webhook", async function(req, res) {
       }
       return;
     }
+
 
     // ── CASE ALREADY DONE ────────────────────────────────
     if (session.caseSummarySent) {
@@ -1003,12 +1003,14 @@ app.post("/webhook", async function(req, res) {
         "2️⃣ Aadhar Card\n" +
         "3️⃣ Bank Statement (with password)\n" +
         "4️⃣ 3 months salary slips or 3 years ITR\n" +
-        "5️⃣ GST Certificate (if self-employed)";
+        "5️⃣ GST Certificate (if self-employed)\n\n" +
+        "Do you want to continue with the application now, or wait for our back office team to connect?";
 
       const sent = await sendInteractiveButtons(from, closingMsg, [
-        { id: "portal_expedite", title: "⚡ Expedite Process" },
-        { id: "portal_support",  title: "🎧 Back Office Support" }
+        { id: "portal_continue", title: "✅ Continue" },
+        { id: "portal_wait",     title: "⏳ Wait" }
       ]);
+
       if (!sent) {
         await sendTextMessage(from, closingMsg + "\n\n📱 Contact: 9594592020");
       }
