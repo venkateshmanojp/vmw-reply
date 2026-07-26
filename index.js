@@ -459,9 +459,16 @@ async function saveLeadToSheet(mobile, name, loanType, city, status) {
       "&mobile="   + encodeURIComponent(mobile) +
       "&name="     + encodeURIComponent(name     || "") +
       "&loanType=" + encodeURIComponent(loanType || "") +
-      "&city="     + encodeURIComponent(city     || "") +
-      "&status="   + encodeURIComponent(status   || "");
+      "&city="     + encodeURIComponent(city     || "");
     await fetch(url);
+
+    if (status) {
+      const statusUrl = process.env.APPS_SCRIPT_URL +
+        "?action=updateWALeadStatus" +
+        "&mobile=" + encodeURIComponent(mobile) +
+        "&status=" + encodeURIComponent(status);
+      await fetch(statusUrl).catch(e => console.error("updateWALeadStatus error:", e.message));
+    }
   } catch(e) {
     console.error("saveLeadToSheet error:", e.message);
   }
