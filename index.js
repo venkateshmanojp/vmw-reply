@@ -380,6 +380,40 @@ function rejectMessageFor(reason) {
   };
   return messages[reason] || "Thank you for sharing! 🙏\n\nBased on your current profile we are unable to proceed at this time. We will be happy to assist you once your profile improves! 😊\n\n*VastMyWealth Advisory*";
 }
+function rejectReasonLabel(reason, session) {
+  const cibil   = session.cibilScore || "-";
+  const bounces = session.bounces != null ? session.bounces : "-";
+  const age     = session.customerAge || "-";
+  const labels = {
+    age          : "Age " + age + " (>60)",
+    cibil_plbl   : "CIBIL " + cibil + " (<700 required)",
+    cibil_other  : "CIBIL " + cibil + " (<650 required)",
+    bounces_plbl : "Bounces " + bounces + " (must be 0)",
+    bounces_other: "Bounces " + bounces + " (>2 allowed)"
+  };
+  return labels[reason] || reason;
+}
+
+function persistPartialFields(session, from) {
+  try {
+    fetch(process.env.APPS_SCRIPT_URL +
+      "?action=saveLeadData" +
+      "&mobile="         + encodeURIComponent(from) +
+      "&age="            + encodeURIComponent(session.customerAge    || "") +
+      "&employmentType=" + encodeURIComponent(session.employmentType || "") +
+      "&gstDate="        + encodeURIComponent(session.gstDate        || "") +
+      "&companyType="    + encodeURIComponent(session.companyType    || "") +
+      "&pincode="        + encodeURIComponent(session.pincode        || "") +
+      "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
+      "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
+      "&bounces="        + encodeURIComponent(session.bounces != null ? session.bounces : "") +
+      "&enquiries="      + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
+      "&enquiryLenders=" + encodeURIComponent(session.enquiryLenders || "")
+    ).catch(e => console.error("persistPartialFields error:", e.message));
+  } catch(e) {
+    console.error("persistPartialFields error:", e.message);
+  }
+}
 
 // ============================================================
 // TRIGGER CASE SUMMARY — direct, no AI analyzer
@@ -900,10 +934,12 @@ app.post("/webhook", async function(req, res) {
       const rejectReason = checkRejection(session);
       if (rejectReason) {
         await sendTextMessage(from, rejectMessageFor(rejectReason));
-        await saveLeadToSheet(from, session.name, session.loanType, session.city, "Rejected - Auto");
+        await saveLeadToSheet(from, session.name, session.loanType, session.city, "Rejected - " + rejectReasonLabel(rejectReason, session));
+        persistPartialFields(session, from);
         session.rejected = true;
         return;
       }
+
     }
 
     // Send reply (only if not rejected above)
@@ -969,8 +1005,10 @@ app.post("/webhook", async function(req, res) {
     // ── HANDLE DECLINED (specialist explicitly declined mid-flow) ───
     if (botResponse.qualificationStatus === "DECLINED") {
       await saveLeadToSheet(from, session.name, session.loanType, session.city, "Declined");
+      persistPartialFields(session, from);
       session.rejected = true;
     }
+
 
 
   } catch(err) {
