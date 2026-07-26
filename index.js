@@ -1,7 +1,8 @@
 // ============================================================
-// VastMyWealth — WhatsApp Relay Server v8
+// VastMyWealth — WhatsApp Relay Server (Final Consolidated)
 // Two Layer Flow: Priya (Welcome) + Specialists
-// Simplified 9-field case brief, no AI analyzer, strict incremental rejection
+// 9-field case brief, no AI analyzer, strict incremental rejection,
+// interactive portal-choice buttons, company type capture
 // ============================================================
 
 const express = require("express");
@@ -23,9 +24,9 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const conversations = {};
 
 // ============================================================
-// THE 9 CASE-BRIEF FIELDS (single source of truth)
+// THE 9+1 CASE-BRIEF FIELDS (single source of truth)
 // ============================================================
-// 1 name  2 age  3 employmentType  4 gstDate (self-employed only)
+// 1 name  2 age  3 employmentType  4 gstDate + companyType (self-employed only)
 // 5 city  5b pincode  6 cibilScore  7 loanType  7b loanAmount
 // 8 bounces  9 enquiries (count) + enquiryLenders (names)
 
@@ -59,7 +60,7 @@ RULES:
 - Once name + age + loan type + city + pincode are ALL collected, transfer to specialist
 - NEVER mention what loans VastMyWealth offers
 - NEVER give phone numbers
-- NEVER mention Manoj
+- NEVER mention any staff name
 
 TRANSFER MESSAGE (based on loan type):
 - Home Loan / LAP / BT+TU → Transfer to Rahul
@@ -98,8 +99,8 @@ Set transferToSpecialist=true ONLY after collecting name + age + loanType + city
 
 // ============================================================
 // LAYER 2 — SPECIALIST (single flexible prompt for all loan types)
-// Collects: employmentType, gstDate (self-employed only), cibilScore,
-//           loanAmount, bounces, enquiries + enquiryLenders
+// Collects: employmentType, gstDate + companyType (self-employed only),
+//           cibilScore, loanAmount, bounces, enquiries + enquiryLenders
 // ============================================================
 function getSpecialistPrompt(specialistName, loanType, customerName, city, pincode, age) {
 
@@ -151,7 +152,7 @@ ${specialistName === "Vikram" ? `1. This is a Business Loan — the customer is 
 6. Any cheque/ECS bounces in last 6 months (get a number, 0 if none)
 7. Any credit enquiries in last 3 months — get the count AND which lender(s) if the customer knows
 
-Do NOT ask about: monthly income, existing EMI amount, company name, work experience, business vintage, property details, co-applicant, or callback timing. None of these are needed.
+Do NOT ask about: monthly income, existing EMI amount, work experience, business vintage, property details, co-applicant, or callback timing. None of these are needed.
 
 IMPORTANT — CHECK ELIGIBILITY AS SOON AS CIBIL AND BOUNCES ARE KNOWN:
 Do not keep asking further questions to a lead that already fails eligibility. Evaluate immediately using:
@@ -177,22 +178,8 @@ Here is what I suggest:
 Once your profile improves, we will be delighted to process your application! 😊
 VastMyWealth is always here for you!"
 
-CLOSING MESSAGE (only once ALL required fields are collected AND qualificationStatus is ELIGIBLE):
-"${customerName || ""} your profile looks really promising! 😊
-
-${loanType && loanType.toUpperCase().includes("CONSTRUCTION") ? "Construction Finance cases are handled personally by our senior team." : "Based on what you have shared, we have strong lender options in " + cityPin + "!"}
-
-Please keep your documents ready:
-1️⃣ PAN Card
-2️⃣ Aadhar Card
-3️⃣ Bank Statement (with password)
-4️⃣ 3 months salary slips or 3 years ITR
-5️⃣ GST Certificate (if self-employed)
-
-Mr. Manoj from our internal underwriting team will connect with you.
-📱 You can also reach our backend team directly: 9594592020
-
-Looking forward to getting you the best deal! 😊”
+CLOSING (only once ALL required fields are collected AND qualificationStatus is ELIGIBLE):
+Simply confirm the profile looks good and that document checklist + next steps will follow — the actual closing message and document checklist are sent separately by the system, not by you. Just set sendCaseSummary=true.
 
 PERSONALITY:
 - Warm and genuinely helpful like a personal advisor
@@ -207,8 +194,7 @@ STRICT RULES:
 - NEVER guarantee approval
 - NEVER use: guaranteed, pakka, 100% sure, definitely
 - NEVER ask for documents
-- NEVER mention Manoj, the underwriting team, or any callback timing (e.g. "2-3 minutes", "shortly", "will call you") at any point during questioning — that information belongs ONLY in the final closing message, which is sent separately once all fields are collected. Do not anticipate or preview it.
-- NEVER give Manoj's phone number except in the closing message
+- NEVER mention any staff name, the underwriting team, phone numbers, or any callback timing (e.g. "shortly", "will call you") at any point — all of that is handled separately by the system after this conversation, not by you
 - Final decision always by lender
 
 LANGUAGE RULES:
@@ -227,7 +213,6 @@ RESPONSE FORMAT — Always respond in this exact JSON only:
   "employmentType": "Salaried or Self-Employed or null",
   "gstDate": "GST registration date/year if self-employed, else null",
   "companyType": "Proprietorship, Partnership, Pvt Ltd, or LLP if self-employed, else null",
-
   "cibilScore": "CIBIL if mentioned or null",
   "loanAmount": "amount if mentioned or null",
   "bounces": "bounce count if mentioned or null",
@@ -266,7 +251,7 @@ PARTNER VERIFICATION:
 - Ask: "Please share your registered mobile number to login"
 - Check partnerStatus from system
 - If approved → "Welcome back [Name]! Let's check your client's eligibility. Please share client details!"
-- If pending → "Your registration is under review. Venkatesh will approve shortly!"
+- If pending → "Your registration is under review. Approval team will confirm shortly!"
 - If not found → Give registration pitch
 
 REGISTRATION PITCH:
@@ -345,8 +330,6 @@ function getTimeGreeting() {
 
 // ============================================================
 // STRICT ELIGIBILITY CHECK — shared by Priya-level and specialist-level
-// Called as soon as we have enough info to make a call. Returns
-// "" if no decision yet / eligible so far, or a reject reason code.
 // ============================================================
 function checkRejection(session) {
   const loanType = (session.loanType || "").toLowerCase();
@@ -380,6 +363,7 @@ function rejectMessageFor(reason) {
   };
   return messages[reason] || "Thank you for sharing! 🙏\n\nBased on your current profile we are unable to proceed at this time. We will be happy to assist you once your profile improves! 😊\n\n*VastMyWealth Advisory*";
 }
+
 function rejectReasonLabel(reason, session) {
   const cibil   = session.cibilScore || "-";
   const bounces = session.bounces != null ? session.bounces : "-";
@@ -394,6 +378,10 @@ function rejectReasonLabel(reason, session) {
   return labels[reason] || reason;
 }
 
+// ============================================================
+// PERSIST PARTIAL FIELDS — called on any rejection so the sheet
+// still has whatever was collected up to that point
+// ============================================================
 function persistPartialFields(session, from) {
   try {
     fetch(process.env.APPS_SCRIPT_URL +
@@ -429,7 +417,6 @@ async function triggerCaseSummary(session, from) {
       "Employment: " + (session.employmentType || "-") + "\n" +
       (session.employmentType === "Self-Employed" ? "GST Registered: " + (session.gstDate || "-") + "\n" : "") +
       (session.employmentType === "Self-Employed" ? "Company Type: " + (session.companyType || "-") + "\n" : "") +
-
       "City / Pincode: " + (session.city || "-") + " / " + (session.pincode || "-") + "\n" +
       "CIBIL: " + (session.cibilScore || "-") + "\n" +
       "Loan Type: " + (session.loanType || "-") + "\n" +
@@ -468,7 +455,7 @@ async function triggerCaseSummary(session, from) {
       "&age="            + encodeURIComponent(session.customerAge    || "") +
       "&employmentType=" + encodeURIComponent(session.employmentType || "") +
       "&gstDate="        + encodeURIComponent(session.gstDate        || "") +
-          "&companyType="    + encodeURIComponent(session.companyType    || "") +
+      "&companyType="    + encodeURIComponent(session.companyType    || "") +
       "&pincode="        + encodeURIComponent(session.pincode        || "") +
       "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
       "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
@@ -492,7 +479,7 @@ async function triggerCaseSummary(session, from) {
 }
 
 // ============================================================
-// SAVE LEAD TO WA LEADS
+// SAVE LEAD TO WA LEADS (status routed through updateWALeadStatus)
 // ============================================================
 async function saveLeadToSheet(mobile, name, loanType, city, status) {
   try {
@@ -571,6 +558,44 @@ async function sendTextMessage(to, text) {
     return data.messages ? true : false;
   } catch(e) {
     console.error("sendTextMessage error:", e.message);
+    return false;
+  }
+}
+
+// ============================================================
+// SEND INTERACTIVE BUTTONS — free-form session message, no
+// Meta template approval needed (works inside the 24hr window)
+// ============================================================
+async function sendInteractiveButtons(to, bodyText, buttons) {
+  try {
+    const res = await fetch(
+      "https://graph.facebook.com/v18.0/" + process.env.PHONE_NUMBER_ID + "/messages",
+      {
+        method : "POST",
+        headers: {
+          "Authorization": "Bearer " + process.env.WHATSAPP_TOKEN,
+          "Content-Type" : "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to               : to,
+          type             : "interactive",
+          interactive: {
+            type: "button",
+            body: { text: bodyText },
+            action: {
+              buttons: buttons.map(function(b) {
+                return { type: "reply", reply: { id: b.id, title: b.title } };
+              })
+            }
+          }
+        })
+      }
+    );
+    const data = await res.json();
+    return data.messages ? true : false;
+  } catch(e) {
+    console.error("sendInteractiveButtons error:", e.message);
     return false;
   }
 }
@@ -671,6 +696,8 @@ function newSession(overrides) {
     partnerMode    : false,
     partnerCode    : null,
     caseSummarySent: false,
+    rejected       : false,
+    awaitingPortalChoice: false,
     greeting       : getTimeGreeting()
   };
   return Object.assign(base, overrides || {});
@@ -829,17 +856,35 @@ app.post("/webhook", async function(req, res) {
     const session = conversations[from];
     session.msgCount++;
 
-    // ── CASE ALREADY DONE ────────────────────────────────
-    if (session.caseSummarySent) {
-      await sendTextMessage(from, "Hi! 😊 Your case is already with our team.\n\nOur Banking RM Manoj will connect with you shortly.\n\nFor any urgent queries feel free to message here!");
+    // ── PORTAL CHOICE RESPONSE ────────────────────────────
+    if (session.awaitingPortalChoice) {
+      session.awaitingPortalChoice = false;
+      const choice = text.toLowerCase();
+      const wantsExpedite = choice.indexOf("expedite") !== -1 || choice.indexOf("⚡") !== -1;
+
+      if (wantsExpedite) {
+        const trackedLink = process.env.APPS_SCRIPT_URL + "?action=portalClick&mobile=" + encodeURIComponent(from);
+        await sendTextMessage(from,
+          "Great! 😊 Upload your documents here to expedite processing:\n" + trackedLink +
+          "\n\nOnce done, our team will review and proceed right away!"
+        );
+      } else {
+        await sendTextMessage(from, "No problem! 😊 Our back office team will connect with you shortly.\n📱 9594592020");
+      }
       return;
     }
+
+    // ── CASE ALREADY DONE ────────────────────────────────
+    if (session.caseSummarySent) {
+      await sendTextMessage(from, "Hi! 😊 Your case is already with our team.\n\nOur back office team will connect with you shortly.\n\nFor any urgent queries feel free to message here!");
+      return;
+    }
+
     // ── ALREADY REJECTED ──────────────────────────────────
     if (session.rejected) {
       await sendTextMessage(from, "Hi! 😊 We've already reviewed your profile and shared feedback earlier.\n\nOnce it improves, just message us again — we'll be happy to help! 🙏");
       return;
     }
-
 
     // ── PARTNER LOGIN ────────────────────────────────────
     if (text.toUpperCase() === "PARTNER LOGIN") {
@@ -861,7 +906,7 @@ app.post("/webhook", async function(req, res) {
           session.partnerName = partnerStatus.name;
           await sendTextMessage(from, `Welcome back ${partnerStatus.name}! 😊\n\nLet's check your client's eligibility.\nPlease share the client's loan requirement and details!`);
         } else if (partnerStatus.found) {
-          await sendTextMessage(from, "Your registration is under review. Venkatesh will approve shortly! We will notify you. 😊");
+          await sendTextMessage(from, "Your registration is under review. Approval team will confirm shortly! We will notify you. 😊");
         } else {
           await sendTextMessage(from, `Hi! Welcome to VastMyWealth Advisory! 😊\n\nI see you are not registered as a partner yet.\n\nHere is why top professionals partner with us:\n\n💰 Attractive commission on every disbursement\n✅ Multiple loan products\n✅ Instant eligibility check for clients\n✅ Dedicated relationship manager\n\nReady to grow your income?\nRegister here: https://forms.gle/LWN949M1k9khsUrGA`);
         }
@@ -929,7 +974,6 @@ app.post("/webhook", async function(req, res) {
     saveConversation(from, "bot", botResponse.message);
 
     // ── STRICT REJECTION CHECK — as soon as we have enough info ──
-    // Runs for both Priya and specialist layers, the instant age/CIBIL/bounces land.
     if (session.layer !== "partner") {
       const rejectReason = checkRejection(session);
       if (rejectReason) {
@@ -939,11 +983,37 @@ app.post("/webhook", async function(req, res) {
         session.rejected = true;
         return;
       }
-
     }
 
-    // Send reply (only if not rejected above)
-    if (botResponse.message) {
+    // ── SEND REPLY — fixed closing flow overrides model output when case qualifies ──
+    const hasMinInfo = session.name && session.loanType && session.city &&
+                       session.employmentType && session.cibilScore &&
+                       session.loanAmount && session.bounces !== null &&
+                       session.enquiries !== null &&
+                       (session.employmentType !== "Self-Employed" || (session.gstDate && session.companyType));
+
+    const willCloseCase = botResponse.sendCaseSummary && !session.caseSummarySent &&
+      botResponse.qualificationStatus === "ELIGIBLE" && hasMinInfo;
+
+    if (willCloseCase) {
+      const closingMsg =
+        (session.name || "") + " your profile looks really promising! 😊\n\n" +
+        "Please keep your documents ready:\n" +
+        "1️⃣ PAN Card\n" +
+        "2️⃣ Aadhar Card\n" +
+        "3️⃣ Bank Statement (with password)\n" +
+        "4️⃣ 3 months salary slips or 3 years ITR\n" +
+        "5️⃣ GST Certificate (if self-employed)";
+
+      const sent = await sendInteractiveButtons(from, closingMsg, [
+        { id: "portal_expedite", title: "⚡ Expedite Process" },
+        { id: "portal_support",  title: "🎧 Back Office Support" }
+      ]);
+      if (!sent) {
+        await sendTextMessage(from, closingMsg + "\n\n📱 Contact: 9594592020");
+      }
+      session.awaitingPortalChoice = true;
+    } else if (botResponse.message) {
       await sendTextMessage(from, botResponse.message);
     }
 
@@ -953,6 +1023,7 @@ app.post("/webhook", async function(req, res) {
       session.layer          = "specialist";
       session.specialistName = botResponse.specialistName;
       session.messages       = []; // Fresh history for specialist
+
       if (session.specialistName === "Vikram") session.employmentType = "Self-Employed"; // Business Loan implies self-employed
 
       console.log("Transferring " + from + " to " + botResponse.specialistName);
@@ -984,22 +1055,11 @@ app.post("/webhook", async function(req, res) {
     }
 
     // ── TRIGGER CASE SUMMARY ─────────────────────────────
-    if (botResponse.sendCaseSummary && !session.caseSummarySent &&
-        botResponse.qualificationStatus === "ELIGIBLE") {
-
-      const hasMinInfo = session.name && session.loanType && session.city &&
-                         session.employmentType && session.cibilScore &&
-                         session.loanAmount && session.bounces !== null &&
-                         session.enquiries !== null &&
-                         (session.employmentType !== "Self-Employed" || (session.gstDate && session.companyType));
-
-
-      if (hasMinInfo) {
-        session.caseSummarySent = true;
-        console.log("Case brief ready for: " + from);
-        await saveLeadToSheet(from, session.name, session.loanType, session.city, "Case Ready");
-        await triggerCaseSummary(session, from);
-      }
+    if (willCloseCase) {
+      session.caseSummarySent = true;
+      console.log("Case brief ready for: " + from);
+      await saveLeadToSheet(from, session.name, session.loanType, session.city, "Case Ready");
+      await triggerCaseSummary(session, from);
     }
 
     // ── HANDLE DECLINED (specialist explicitly declined mid-flow) ───
@@ -1008,8 +1068,6 @@ app.post("/webhook", async function(req, res) {
       persistPartialFields(session, from);
       session.rejected = true;
     }
-
-
 
   } catch(err) {
     console.error("Webhook error:", err.message);
@@ -1021,8 +1079,8 @@ app.post("/webhook", async function(req, res) {
 // ============================================================
 app.get("/", function(req, res) {
   res.json({
-    status : "VastMyWealth Relay v8 — Priya + Specialists, direct case brief (no AI analyzer)",
-    version: "v8",
+    status : "VastMyWealth Relay — Final Consolidated (no AI analyzer, portal-choice buttons)",
+    version: "final",
     time   : new Date().toISOString()
   });
 });
@@ -1032,6 +1090,6 @@ app.get("/", function(req, res) {
 // ============================================================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, function() {
-  console.log("🚀 VastMyWealth Relay v8 running on port " + PORT);
+  console.log("🚀 VastMyWealth Relay running on port " + PORT);
 });
 
