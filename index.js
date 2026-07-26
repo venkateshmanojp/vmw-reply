@@ -143,12 +143,13 @@ Let me ask you a few quick questions to find you the best deal!"
 
 FIELDS YOU MUST COLLECT — ask ONE at a time, IN ANY ORDER that fits the conversation naturally:
 ${specialistName === "Vikram" ? `1. This is a Business Loan — the customer is Self-Employed by default. Do NOT ask if they are salaried or self-employed.
-2. GST registration date/year (ask directly)` : `1. Employment type — Salaried or Self-Employed
-2. If Self-Employed ONLY: date/year GST was registered (skip entirely if Salaried)`}
-3. Approximate CIBIL score (suggest checking on GPay/PaisaBazaar if not sure)
-4. Loan amount required
-5. Any cheque/ECS bounces in last 6 months (get a number, 0 if none)
-6. Any credit enquiries in last 3 months — get the count AND which lender(s) if the customer knows
+2. GST registration date/year (ask directly)
+3. Type of company — Proprietorship, Partnership, Pvt Ltd, or LLP (ask directly)` : `1. Employment type — Salaried or Self-Employed
+2. If Self-Employed ONLY: date/year GST was registered, AND type of company — Proprietorship, Partnership, Pvt Ltd, or LLP (skip both entirely if Salaried)`}
+4. Approximate CIBIL score (suggest checking on GPay/PaisaBazaar if not sure)
+5. Loan amount required
+6. Any cheque/ECS bounces in last 6 months (get a number, 0 if none)
+7. Any credit enquiries in last 3 months — get the count AND which lender(s) if the customer knows
 
 Do NOT ask about: monthly income, existing EMI amount, company name, work experience, business vintage, property details, co-applicant, or callback timing. None of these are needed.
 
@@ -181,16 +182,17 @@ CLOSING MESSAGE (only once ALL required fields are collected AND qualificationSt
 
 ${loanType && loanType.toUpperCase().includes("CONSTRUCTION") ? "Construction Finance cases are handled personally by our senior team." : "Based on what you have shared, we have strong lender options in " + cityPin + "!"}
 
-Here is what happens next:
+Please keep your documents ready:
+1️⃣ PAN Card
+2️⃣ Aadhar Card
+3️⃣ Bank Statement (with password)
+4️⃣ 3 months salary slips or 3 years ITR
+5️⃣ GST Certificate (if self-employed)
 
-1️⃣ I am preparing your complete case file right now 📋
+Mr. Manoj from our internal underwriting team will connect with you.
+📱 You can also reach our backend team directly: 9594592020
 
-2️⃣ Please save our Banking RM Manoj's number right away:
-📱 9594592020 — Manoj (Your Banking RM)
-
-3️⃣ He will connect with you very soon — no need to wait for a scheduled call, he'll reach out ASAP! ✅
-
-Looking forward to getting you the best deal! 😊"
+Looking forward to getting you the best deal! 😊”
 
 PERSONALITY:
 - Warm and genuinely helpful like a personal advisor
@@ -223,6 +225,8 @@ RESPONSE FORMAT — Always respond in this exact JSON only:
   "message": "your response to customer",
   "employmentType": "Salaried or Self-Employed or null",
   "gstDate": "GST registration date/year if self-employed, else null",
+  "companyType": "Proprietorship, Partnership, Pvt Ltd, or LLP if self-employed, else null",
+
   "cibilScore": "CIBIL if mentioned or null",
   "loanAmount": "amount if mentioned or null",
   "bounces": "bounce count if mentioned or null",
@@ -233,7 +237,7 @@ RESPONSE FORMAT — Always respond in this exact JSON only:
 }
 
 Set sendCaseSummary=true ONLY when:
-- employmentType, (gstDate if self-employed), cibilScore, loanAmount, bounces, enquiries are ALL collected ✅
+- employmentType, (gstDate AND companyType if self-employed), cibilScore, loanAmount, bounces, enquiries are ALL collected ✅
 - qualificationStatus is ELIGIBLE ✅
 - NEVER set true before all required fields answered
 - NEVER set true if qualificationStatus is DECLINED`;
@@ -389,6 +393,8 @@ async function triggerCaseSummary(session, from) {
       "Age: " + (session.customerAge || "-") + "\n" +
       "Employment: " + (session.employmentType || "-") + "\n" +
       (session.employmentType === "Self-Employed" ? "GST Registered: " + (session.gstDate || "-") + "\n" : "") +
+      (session.employmentType === "Self-Employed" ? "Company Type: " + (session.companyType || "-") + "\n" : "") +
+
       "City / Pincode: " + (session.city || "-") + " / " + (session.pincode || "-") + "\n" +
       "CIBIL: " + (session.cibilScore || "-") + "\n" +
       "Loan Type: " + (session.loanType || "-") + "\n" +
@@ -404,6 +410,7 @@ async function triggerCaseSummary(session, from) {
       age            : session.customerAge    || "",
       employmentType : session.employmentType || "",
       gstDate        : session.gstDate        || "",
+      companyType    : session.companyType    || "",
       loanType       : session.loanType       || "",
       loanAmount     : session.loanAmount     || "",
       city           : session.city           || "",
@@ -426,6 +433,7 @@ async function triggerCaseSummary(session, from) {
       "&age="            + encodeURIComponent(session.customerAge    || "") +
       "&employmentType=" + encodeURIComponent(session.employmentType || "") +
       "&gstDate="        + encodeURIComponent(session.gstDate        || "") +
+          "&companyType="    + encodeURIComponent(session.companyType    || "") +
       "&pincode="        + encodeURIComponent(session.pincode        || "") +
       "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
       "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
@@ -620,6 +628,7 @@ function newSession(overrides) {
     pincode        : null,
     employmentType : null,
     gstDate        : null,
+    companyType    : null,
     cibilScore     : null,
     bounces        : null,
     enquiries      : null,
@@ -874,6 +883,7 @@ app.post("/webhook", async function(req, res) {
     if (botResponse.pincode)         session.pincode        = botResponse.pincode;
     if (botResponse.employmentType)  session.employmentType = botResponse.employmentType;
     if (botResponse.gstDate)         session.gstDate        = botResponse.gstDate;
+    if (botResponse.companyType)     session.companyType    = botResponse.companyType;
     if (botResponse.cibilScore)      session.cibilScore     = botResponse.cibilScore;
     if (botResponse.bounces !== undefined && botResponse.bounces !== null) session.bounces = botResponse.bounces;
     if (botResponse.enquiries !== undefined && botResponse.enquiries !== null) session.enquiries = botResponse.enquiries;
@@ -944,7 +954,8 @@ app.post("/webhook", async function(req, res) {
                          session.employmentType && session.cibilScore &&
                          session.loanAmount && session.bounces !== null &&
                          session.enquiries !== null &&
-                         (session.employmentType !== "Self-Employed" || session.gstDate);
+                         (session.employmentType !== "Self-Employed" || (session.gstDate && session.companyType));
+
 
       if (hasMinInfo) {
         session.caseSummarySent = true;
