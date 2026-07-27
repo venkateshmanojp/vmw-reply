@@ -386,18 +386,21 @@ function persistPartialFields(session, from) {
   try {
     fetch(process.env.APPS_SCRIPT_URL +
       "?action=saveLeadData" +
-      "&mobile="         + encodeURIComponent(from) +
-      "&age="            + encodeURIComponent(session.customerAge    || "") +
-      "&employmentType=" + encodeURIComponent(session.employmentType || "") +
-      "&gstDate="        + encodeURIComponent(session.gstDate        || "") +
-      "&companyType="    + encodeURIComponent(session.companyType    || "") +
-      "&pincode="        + encodeURIComponent(session.pincode        || "") +
-      "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
-      "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
-      "&bounces="        + encodeURIComponent(session.bounces != null ? session.bounces : "") +
-      "&enquiries="      + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
-      "&enquiryLenders=" + encodeURIComponent(session.enquiryLenders || "")
-    ).catch(e => console.error("persistPartialFields error:", e.message));
+      "&mobile="            + encodeURIComponent(from) +
+      "&partnerMobile="     + encodeURIComponent(session.partnerCode    || "") +
+      "&age="               + encodeURIComponent(session.customerAge    || "") +
+      "&employmentType="    + encodeURIComponent(session.employmentType || "") +
+      "&gstDate="           + encodeURIComponent(session.gstDate        || "") +
+      "&companyType="       + encodeURIComponent(session.companyType    || "") +
+      "&propertyDetails="   + encodeURIComponent(session.propertyDetails || "") +
+      "&pincode="           + encodeURIComponent(session.pincode        || "") +
+      "&cibilScore="        + encodeURIComponent(session.cibilScore     || "") +
+      "&loanAmount="        + encodeURIComponent(session.loanAmount     || "") +
+      "&bounces="           + encodeURIComponent(session.bounces != null ? session.bounces : "") +
+      "&enquiries="         + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
+      "&enquiryLenders="    + encodeURIComponent(session.enquiryLenders || "") +
+      "&caseSummary="       + encodeURIComponent(briefText)
+    ).catch(e => console.error("saveLeadData error:", e.message));
   } catch(e) {
     console.error("persistPartialFields error:", e.message);
   }
