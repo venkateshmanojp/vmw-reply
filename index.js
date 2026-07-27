@@ -826,6 +826,26 @@ app.post("/webhook", async function(req, res) {
         }
       } catch(e) { console.error("Broadcast check error:", e.message); }
     }
+// Check if this mobile is a referred family member lead
+    if (!conversations[from]) {
+      try {
+        const refRes  = await fetch(process.env.APPS_SCRIPT_URL +
+          "?action=getReferralLead&mobile=" + encodeURIComponent(from));
+        const refData = await refRes.json();
+        if (refData.success && refData.lead) {
+          const rl = refData.lead;
+          conversations[from] = newSession({
+            layer          : "specialist",
+            specialistName : getSpecialistName(rl.loanType),
+            name           : rl.name,
+            loanType       : rl.loanType,
+            city           : rl.city,
+            isReferralLead : true
+          });
+          console.log("✅ Referral (family) lead loaded: " + from + " | " + rl.name);
+        }
+      } catch(e) { console.error("Referral lead check error:", e.message); }
+    }
 
     if (!conversations[from] && text.toUpperCase().includes("START APPLICATION")) {
       try {
