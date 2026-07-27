@@ -1,8 +1,9 @@
 // ============================================================
-// VastMyWealth — WhatsApp Relay Server (Final Consolidated)
+// VastMyWealth — WhatsApp Relay Server (Final Consolidated v2)
 // Two Layer Flow: Priya (Welcome) + Specialists
 // 9-field case brief, no AI analyzer, strict incremental rejection,
-// interactive portal-choice buttons, company type capture
+// portal continue/wait buttons, company type capture,
+// age/CIBIL rejection alternatives (family member / property-LAP)
 // ============================================================
 
 const express = require("express");
@@ -22,13 +23,6 @@ app.use(function(req, res, next) {
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const conversations = {};
-
-// ============================================================
-// THE 9+1 CASE-BRIEF FIELDS (single source of truth)
-// ============================================================
-// 1 name  2 age  3 employmentType  4 gstDate + companyType (self-employed only)
-// 5 city  5b pincode  6 cibilScore  7 loanType  7b loanAmount
-// 8 bounces  9 enquiries (count) + enquiryLenders (names)
 
 // ============================================================
 // LAYER 1 — PRIYA (Welcome Agent)
@@ -386,21 +380,18 @@ function persistPartialFields(session, from) {
   try {
     fetch(process.env.APPS_SCRIPT_URL +
       "?action=saveLeadData" +
-      "&mobile="            + encodeURIComponent(from) +
-      "&partnerMobile="     + encodeURIComponent(session.partnerCode    || "") +
-      "&age="               + encodeURIComponent(session.customerAge    || "") +
-      "&employmentType="    + encodeURIComponent(session.employmentType || "") +
-      "&gstDate="           + encodeURIComponent(session.gstDate        || "") +
-      "&companyType="       + encodeURIComponent(session.companyType    || "") +
-      "&propertyDetails="   + encodeURIComponent(session.propertyDetails || "") +
-      "&pincode="           + encodeURIComponent(session.pincode        || "") +
-      "&cibilScore="        + encodeURIComponent(session.cibilScore     || "") +
-      "&loanAmount="        + encodeURIComponent(session.loanAmount     || "") +
-      "&bounces="           + encodeURIComponent(session.bounces != null ? session.bounces : "") +
-      "&enquiries="         + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
-      "&enquiryLenders="    + encodeURIComponent(session.enquiryLenders || "") +
-      "&caseSummary="       + encodeURIComponent(briefText)
-    ).catch(e => console.error("saveLeadData error:", e.message));
+      "&mobile="         + encodeURIComponent(from) +
+      "&age="            + encodeURIComponent(session.customerAge    || "") +
+      "&employmentType=" + encodeURIComponent(session.employmentType || "") +
+      "&gstDate="        + encodeURIComponent(session.gstDate        || "") +
+      "&companyType="    + encodeURIComponent(session.companyType    || "") +
+      "&pincode="        + encodeURIComponent(session.pincode        || "") +
+      "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
+      "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
+      "&bounces="        + encodeURIComponent(session.bounces != null ? session.bounces : "") +
+      "&enquiries="      + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
+      "&enquiryLenders=" + encodeURIComponent(session.enquiryLenders || "")
+    ).catch(e => console.error("persistPartialFields error:", e.message));
   } catch(e) {
     console.error("persistPartialFields error:", e.message);
   }
@@ -437,6 +428,7 @@ async function triggerCaseSummary(session, from) {
       employmentType : session.employmentType || "",
       gstDate        : session.gstDate        || "",
       companyType    : session.companyType    || "",
+      propertyDetails: session.propertyDetails || "",
       loanType       : session.loanType       || "",
       loanAmount     : session.loanAmount     || "",
       city           : session.city           || "",
@@ -454,23 +446,20 @@ async function triggerCaseSummary(session, from) {
     // Save all lead data directly — no AI analyzer step
     fetch(process.env.APPS_SCRIPT_URL +
       "?action=saveLeadData" +
-      "&mobile="         + encodeURIComponent(from) +
-      "&partnerMobile="  + encodeURIComponent(session.partnerCode    || "") +
-      "&age="            + encodeURIComponent(session.customerAge    || "") +
-      "&employmentType=" + encodeURIComponent(session.employmentType || "") +
-      "&gstDate="        + encodeURIComponent(session.gstDate        || "") +
-      "&companyType="    + encodeURIComponent(session.companyType    || "") +
-          propertyDetails: session.propertyDetails || "",
-          "&propertyDetails=" + encodeURIComponent(session.propertyDetails || "") +
-
-
-      "&pincode="        + encodeURIComponent(session.pincode        || "") +
-      "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
-      "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
-      "&bounces="        + encodeURIComponent(session.bounces != null ? session.bounces : "") +
-      "&enquiries="      + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
-      "&enquiryLenders=" + encodeURIComponent(session.enquiryLenders || "") +
-      "&caseSummary="    + encodeURIComponent(briefText)
+      "&mobile="            + encodeURIComponent(from) +
+      "&partnerMobile="     + encodeURIComponent(session.partnerCode    || "") +
+      "&age="               + encodeURIComponent(session.customerAge    || "") +
+      "&employmentType="    + encodeURIComponent(session.employmentType || "") +
+      "&gstDate="           + encodeURIComponent(session.gstDate        || "") +
+      "&companyType="       + encodeURIComponent(session.companyType    || "") +
+      "&propertyDetails="   + encodeURIComponent(session.propertyDetails || "") +
+      "&pincode="           + encodeURIComponent(session.pincode        || "") +
+      "&cibilScore="        + encodeURIComponent(session.cibilScore     || "") +
+      "&loanAmount="        + encodeURIComponent(session.loanAmount     || "") +
+      "&bounces="           + encodeURIComponent(session.bounces != null ? session.bounces : "") +
+      "&enquiries="         + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
+      "&enquiryLenders="    + encodeURIComponent(session.enquiryLenders || "") +
+      "&caseSummary="       + encodeURIComponent(briefText)
     ).catch(e => console.error("saveLeadData error:", e.message));
 
     // Update broadcast sheet if broadcast lead
@@ -697,6 +686,7 @@ function newSession(overrides) {
     employmentType : null,
     gstDate        : null,
     companyType    : null,
+    propertyDetails: null,
     cibilScore     : null,
     bounces        : null,
     enquiries      : null,
@@ -709,7 +699,6 @@ function newSession(overrides) {
     altStep        : null,
     altFamilyName  : null,
     altOffered     : null,
-
     greeting       : getTimeGreeting()
   };
   return Object.assign(base, overrides || {});
@@ -834,7 +823,8 @@ app.post("/webhook", async function(req, res) {
         }
       } catch(e) { console.error("Broadcast check error:", e.message); }
     }
-// Check if this mobile is a referred family member lead
+
+    // Check if this mobile is a referred family member lead
     if (!conversations[from]) {
       try {
         const refRes  = await fetch(process.env.APPS_SCRIPT_URL +
@@ -899,13 +889,15 @@ app.post("/webhook", async function(req, res) {
           "Great! 😊 Continue your application here:\nhttps://loan.vastmywealth.com" +
           "\n\nOnce done, our team will review and proceed right away!"
         );
+        await saveLeadToSheet(from, session.name, session.loanType, session.city, "Application Started");
+        fetch(process.env.APPS_SCRIPT_URL + "?action=portalClick&mobile=" + encodeURIComponent(from)).catch(function(){});
       } else {
         await sendTextMessage(from, "No problem! 😊 Our back office team will connect with you shortly.\n📱 9594592020");
       }
       return;
     }
 
-// ── ALTERNATIVE PATH (family member / property) ──────
+    // ── ALTERNATIVE PATH (family member / property) ──────
     if (session.altStep === "choice") {
       const altChoice = text.toLowerCase();
       if (altChoice.indexOf("family") !== -1 || altChoice.indexOf("👪") !== -1) {
@@ -915,7 +907,6 @@ app.post("/webhook", async function(req, res) {
         session.altStep = "property_details";
         await sendTextMessage(from, "Great! 😊 Please share the property location/city and its approximate value.");
       } else {
-
         session.altStep = null;
         session.rejected = true;
         await sendTextMessage(from, "No problem! 😊 We'll be here whenever you're ready.\nVastMyWealth Advisory");
@@ -952,7 +943,6 @@ app.post("/webhook", async function(req, res) {
         console.error("saveReferralLead error:", e.message);
       }
 
-
       await sendTextMessage(from, "Thank you! 😊 We've noted " + (session.altFamilyName || "their") + "'s details.\n\nPlease ask them to message us on this same WhatsApp number to continue, or our team will reach out to them directly!");
       session.altStep = null;
       session.rejected = true;
@@ -984,7 +974,6 @@ app.post("/webhook", async function(req, res) {
       await saveLeadToSheet(from, session.name, session.loanType, session.city, "Qualifying - LAP (Referred)");
       return;
     }
-
 
     // ── CASE ALREADY DONE ────────────────────────────────
     if (session.caseSummarySent) {
@@ -1113,11 +1102,9 @@ app.post("/webhook", async function(req, res) {
         } else {
           session.rejected = true;
         }
-
         return;
       }
     }
-
 
     // ── SEND REPLY — fixed closing flow overrides model output when case qualifies ──
     const hasMinInfo = session.name && session.loanType && session.city &&
@@ -1144,7 +1131,6 @@ app.post("/webhook", async function(req, res) {
         { id: "portal_continue", title: "✅ Continue" },
         { id: "portal_wait",     title: "⏳ Wait" }
       ]);
-
       if (!sent) {
         await sendTextMessage(from, closingMsg + "\n\n📱 Contact: 9594592020");
       }
@@ -1215,8 +1201,8 @@ app.post("/webhook", async function(req, res) {
 // ============================================================
 app.get("/", function(req, res) {
   res.json({
-    status : "VastMyWealth Relay — Final Consolidated (no AI analyzer, portal-choice buttons)",
-    version: "final",
+    status : "VastMyWealth Relay — Final Consolidated v2",
+    version: "final2",
     time   : new Date().toISOString()
   });
 });
