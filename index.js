@@ -698,6 +698,10 @@ function newSession(overrides) {
     caseSummarySent: false,
     rejected       : false,
     awaitingPortalChoice: false,
+    altStep        : null,
+    altFamilyName  : null,
+    altOffered     : null,
+
     greeting       : getTimeGreeting()
   };
   return Object.assign(base, overrides || {});
@@ -873,6 +877,70 @@ app.post("/webhook", async function(req, res) {
       return;
     }
 
+// ── ALTERNATIVE PATH (family member / property) ──────
+    if (session.altStep === "choice") {
+      const altChoice = text.toLowerCase();
+      if (altChoice.indexOf("family") !== -1 || altChoice.indexOf("👪") !== -1) {
+        session.altStep = "family_name";
+        await sendTextMessage(from, "Great! 😊 Please share your family member's full name.");
+      } else if (session.altOffered === "family_property" && (altChoice.indexOf("property") !== -1 || altChoice.indexOf("🏠") !== -1)) {
+        session.altStep = "property_details";
+        await sendTextMessage(from, "Great! 😊 Please share the property location/city and its approximate value.");
+      } else {
+
+        session.altStep = null;
+        session.rejected = true;
+        await sendTextMessage(from, "No problem! 😊 We'll be here whenever you're ready.\nVastMyWealth Advisory");
+      }
+      return;
+    }
+
+    if (session.altStep === "family_name") {
+      session.altFamilyName = text.trim();
+      session.altStep = "family_mobile";
+      await sendTextMessage(from, "Thanks! Please share their WhatsApp mobile number (10 digits).");
+      return;
+    }
+
+    if (session.altStep === "family_mobile") {
+      const digits = text.replace(/\D/g, "").slice(-10);
+      if (digits.length !== 10) {
+        await sendTextMessage(from, "That doesn't look like a valid 10-digit number — please share it again.");
+        return;
+      }
+      const familyMobile = "91" + digits;
+      fetch(process.env.APPS_SCRIPT_URL +
+        "?action=saveReferralLead" +
+        "&type="       + encodeURIComponent("family") +
+        "&mobile="     + encodeURIComponent(familyMobile) +
+        "&name="       + encodeURIComponent(session.altFamilyName || "") +
+        "&loanType="   + encodeURIComponent(session.loanType || "") +
+        "&city="       + encodeURIComponent(session.city || "") +
+        "&referredBy=" + encodeURIComponent(from)
+      ).catch(e => console.error("saveReferralLead error:", e.message));
+
+      await sendTextMessage(from, "Thank you! 😊 We've noted " + (session.altFamilyName || "their") + "'s details.\n\nPlease ask them to message us on this same WhatsApp number to continue, or our team will reach out to them directly!");
+      session.altStep = null;
+      session.rejected = true;
+      return;
+    }
+
+    if (session.altStep === "property_details") {
+      fetch(process.env.APPS_SCRIPT_URL +
+        "?action=saveReferralLead" +
+        "&type="            + encodeURIComponent("property") +
+        "&mobile="          + encodeURIComponent(from) +
+        "&name="            + encodeURIComponent(session.name || "") +
+        "&loanType="        + encodeURIComponent("Loan Against Property") +
+        "&city="            + encodeURIComponent(session.city || "") +
+        "&propertyDetails=" + encodeURIComponent(text.trim())
+      ).catch(e => console.error("saveReferralLead error:", e.message));
+
+      await sendTextMessage(from, "Thank you! 😊 We've noted your property details for a Loan Against Property option.\n\nOur team will review and reach out to discuss further!");
+      session.altStep = null;
+      session.rejected = true;
+      return;
+    }
 
     // ── CASE ALREADY DONE ────────────────────────────────
     if (session.caseSummarySent) {
@@ -980,10 +1048,32 @@ app.post("/webhook", async function(req, res) {
         await sendTextMessage(from, rejectMessageFor(rejectReason));
         await saveLeadToSheet(from, session.name, session.loanType, session.city, "Rejected - " + rejectReasonLabel(rejectReason, session));
         persistPartialFields(session, from);
-        session.rejected = true;
+
+        if (rejectReason === "age") {
+          const altSent = await sendInteractiveButtons(from,
+            "Do you have an earning family member who could apply instead?",
+            [ { id: "alt_family", title: "👪 Family Member" } ]
+          );
+          if (altSent) { session.altStep = "choice"; session.altOffered = "family_only"; }
+          else session.rejected = true;
+        } else if (rejectReason === "cibil_plbl") {
+          const altSent = await sendInteractiveButtons(from,
+            "Do you have an earning family member who could apply instead, or do you own a property we could use for a Loan Against Property?",
+            [
+              { id: "alt_family",   title: "👪 Family Member" },
+              { id: "alt_property", title: "🏠 Have Property" }
+            ]
+          );
+          if (altSent) { session.altStep = "choice"; session.altOffered = "family_property"; }
+          else session.rejected = true;
+        } else {
+          session.rejected = true;
+        }
+
         return;
       }
     }
+
 
     // ── SEND REPLY — fixed closing flow overrides model output when case qualifies ──
     const hasMinInfo = session.name && session.loanType && session.city &&
