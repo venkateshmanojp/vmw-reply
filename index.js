@@ -421,6 +421,7 @@ async function triggerCaseSummary(session, from) {
       "CIBIL: " + (session.cibilScore || "-") + "\n" +
       "Loan Type: " + (session.loanType || "-") + "\n" +
       "Loan Amount: " + (session.loanAmount || "-") + "\n" +
+      (session.propertyDetails ? "Property Details: " + session.propertyDetails + "\n" : "") +
       "Bounces (6 mo): " + (session.bounces != null ? session.bounces : "-") + "\n" +
       "Enquiries (3 mo): " + (session.enquiries != null ? session.enquiries : "-") +
       (session.enquiryLenders ? " (" + session.enquiryLenders + ")" : "");
@@ -456,6 +457,10 @@ async function triggerCaseSummary(session, from) {
       "&employmentType=" + encodeURIComponent(session.employmentType || "") +
       "&gstDate="        + encodeURIComponent(session.gstDate        || "") +
       "&companyType="    + encodeURIComponent(session.companyType    || "") +
+          propertyDetails: session.propertyDetails || "",
+          "&propertyDetails=" + encodeURIComponent(session.propertyDetails || "") +
+
+
       "&pincode="        + encodeURIComponent(session.pincode        || "") +
       "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
       "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
@@ -929,15 +934,21 @@ app.post("/webhook", async function(req, res) {
         return;
       }
       const familyMobile = "91" + digits;
-      fetch(process.env.APPS_SCRIPT_URL +
-        "?action=saveReferralLead" +
-        "&type="       + encodeURIComponent("family") +
-        "&mobile="     + encodeURIComponent(familyMobile) +
-        "&name="       + encodeURIComponent(session.altFamilyName || "") +
-        "&loanType="   + encodeURIComponent(session.loanType || "") +
-        "&city="       + encodeURIComponent(session.city || "") +
-        "&referredBy=" + encodeURIComponent(from)
-      ).catch(e => console.error("saveReferralLead error:", e.message));
+      try {
+        const refRes  = await fetch(process.env.APPS_SCRIPT_URL +
+          "?action=saveReferralLead" +
+          "&type="       + encodeURIComponent("family") +
+          "&mobile="     + encodeURIComponent(familyMobile) +
+          "&name="       + encodeURIComponent(session.altFamilyName || "") +
+          "&loanType="   + encodeURIComponent(session.loanType || "") +
+          "&city="       + encodeURIComponent(session.city || "") +
+          "&referredBy=" + encodeURIComponent(from));
+        const refData = await refRes.json();
+        console.log("saveReferralLead (family) result:", JSON.stringify(refData));
+      } catch(e) {
+        console.error("saveReferralLead error:", e.message);
+      }
+
 
       await sendTextMessage(from, "Thank you! 😊 We've noted " + (session.altFamilyName || "their") + "'s details.\n\nPlease ask them to message us on this same WhatsApp number to continue, or our team will reach out to them directly!");
       session.altStep = null;
@@ -946,21 +957,31 @@ app.post("/webhook", async function(req, res) {
     }
 
     if (session.altStep === "property_details") {
-      fetch(process.env.APPS_SCRIPT_URL +
-        "?action=saveReferralLead" +
-        "&type="            + encodeURIComponent("property") +
-        "&mobile="          + encodeURIComponent(from) +
-        "&name="            + encodeURIComponent(session.name || "") +
-        "&loanType="        + encodeURIComponent("Loan Against Property") +
-        "&city="            + encodeURIComponent(session.city || "") +
-        "&propertyDetails=" + encodeURIComponent(text.trim())
-      ).catch(e => console.error("saveReferralLead error:", e.message));
+      session.propertyDetails = text.trim();
+      session.loanType        = "Loan Against Property";
+      session.specialistName  = getSpecialistName(session.loanType); // Rahul
+      session.loanAmount      = null; // ask fresh — PL amount won't reflect LAP
+      session.rejected        = false;
+      session.altStep         = null;
 
-      await sendTextMessage(from, "Thank you! 😊 We've noted your property details for a Loan Against Property option.\n\nOur team will review and reach out to discuss further!");
-      session.altStep = null;
-      session.rejected = true;
+      await sendTextMessage(from, "Thank you! 😊 Noted your property details. Let's continue your Loan Against Property application — just a couple more quick questions!");
+
+      const lapPrompt = getSpecialistPrompt(
+        session.specialistName, session.loanType, session.name, session.city, session.pincode, session.customerAge
+      );
+      const continueResponse = await callClaude(
+        "CONTINUE — the customer wants to proceed with a Loan Against Property application using their existing profile. Ask only for whatever required fields are still missing.",
+        [],
+        lapPrompt
+      );
+      if (continueResponse && continueResponse.message) {
+        await sendTextMessage(from, continueResponse.message);
+        session.messages.push({ role: "assistant", content: JSON.stringify(continueResponse) });
+      }
+      await saveLeadToSheet(from, session.name, session.loanType, session.city, "Qualifying - LAP (Referred)");
       return;
     }
+
 
     // ── CASE ALREADY DONE ────────────────────────────────
     if (session.caseSummarySent) {
