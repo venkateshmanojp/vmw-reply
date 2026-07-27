@@ -950,28 +950,26 @@ app.post("/webhook", async function(req, res) {
     }
 
     if (session.altStep === "property_details") {
-      session.propertyDetails = text.trim();
-      session.loanType        = "Loan Against Property";
-      session.specialistName  = getSpecialistName(session.loanType); // Rahul
-      session.loanAmount      = null; // ask fresh — PL amount won't reflect LAP
-      session.rejected        = false;
-      session.altStep         = null;
-
-      await sendTextMessage(from, "Thank you! 😊 Noted your property details. Let's continue your Loan Against Property application — just a couple more quick questions!");
-
-      const lapPrompt = getSpecialistPrompt(
-        session.specialistName, session.loanType, session.name, session.city, session.pincode, session.customerAge
-      );
-      const continueResponse = await callClaude(
-        "CONTINUE — the customer wants to proceed with a Loan Against Property application using their existing profile. Ask only for whatever required fields are still missing.",
-        [],
-        lapPrompt
-      );
-      if (continueResponse && continueResponse.message) {
-        await sendTextMessage(from, continueResponse.message);
-        session.messages.push({ role: "assistant", content: JSON.stringify(continueResponse) });
+      try {
+        const refRes  = await fetch(process.env.APPS_SCRIPT_URL +
+          "?action=saveReferralLead" +
+          "&type="             + encodeURIComponent("property") +
+          "&mobile="           + encodeURIComponent(from) +
+          "&name="             + encodeURIComponent(session.name || "") +
+          "&loanType="         + encodeURIComponent("Loan Against Property") +
+          "&city="             + encodeURIComponent(session.city || "") +
+          "&propertyDetails="  + encodeURIComponent(text.trim()) +
+          "&cibilScore="       + encodeURIComponent(session.cibilScore || "") +
+          "&originalLoanType=" + encodeURIComponent(session.loanType || ""));
+        const refData = await refRes.json();
+        console.log("saveReferralLead (property) result:", JSON.stringify(refData));
+      } catch(e) {
+        console.error("saveReferralLead error:", e.message);
       }
-      await saveLeadToSheet(from, session.name, session.loanType, session.city, "Qualifying - LAP (Referred)");
+
+      await sendTextMessage(from, "Thank you! 😊 We've noted your property details for a Loan Against Property option.\n\nOur team will personally review this and reach out to discuss further!");
+      session.altStep  = null;
+      session.rejected = true;
       return;
     }
 
