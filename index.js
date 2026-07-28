@@ -143,7 +143,7 @@ ${specialistName === "Vikram" ? `1. This is a Business Loan — the customer is 
 2. If Self-Employed ONLY: date/year GST was registered, AND type of company — Proprietorship, Partnership, Pvt Ltd, or LLP (skip both entirely if Salaried)`}
 4. Approximate CIBIL score (suggest checking on GPay/PaisaBazaar if not sure)
 5. Loan amount required
-6. Any cheque/ECS bounces in last 6 months (get a number, 0 if none)
+6. Any cheque/ECS bounces in last 6 months (get a number, 0 if none). If the count is more than 0, ALSO ask: (a) were these bounces cleared/regularized since?, and (b) which loan had the bounce — Personal Loan, Business Loan, Home Loan, LAP, or Other. Do NOT skip these two follow-ups when bounces > 0.
 7. Any credit enquiries in last 3 months — get the count AND which lender(s) if the customer knows
 
 Do NOT ask about: monthly income, existing EMI amount, work experience, business vintage, property details, co-applicant, or callback timing. None of these are needed.
@@ -155,8 +155,9 @@ QUALIFICATION CRITERIA:
 - Age: if age > 60, DECLINE immediately (cannot complete standard tenure)
 - CIBIL for Personal Loan / Business Loan: minimum 700 → below 700 DECLINE immediately
 - CIBIL for Home Loan / LAP / Construction Finance: minimum 650 → below 650 DECLINE immediately
-- Bounces for Personal Loan / Business Loan: must be 0 → any bounce DECLINE immediately
-- Bounces for Home Loan / LAP / Construction Finance: max 2 allowed → 3+ DECLINE immediately
+- Bounces for Personal Loan / Business Loan: must be 0, UNLESS the bounces were cleared/regularized — if cleared, do not decline on this basis. If not cleared, DECLINE immediately.
+- Bounces for Home Loan / LAP / Construction Finance: max 2 allowed, UNLESS cleared — if cleared, do not decline on this basis. If not cleared and bounces > 2, DECLINE immediately.
+- Do NOT decide decline/eligible based on bounces until you have asked whether they were cleared (and which loan type had the bounce, if bounces > 0). Ask that first, then evaluate.
 - Enquiries in last 3 months: NO auto-decline — just record the count and lender names, this is shown to the banker, not a rejection trigger
 
 The moment you receive a CIBIL score or bounce count that fails the above, STOP asking further questions and set qualificationStatus=DECLINED with the decline message below. Do not proceed to remaining fields.
@@ -210,6 +211,9 @@ RESPONSE FORMAT — Always respond in this exact JSON only:
   "cibilScore": "CIBIL if mentioned or null",
   "loanAmount": "amount if mentioned or null",
   "bounces": "bounce count if mentioned or null",
+  "bounceCleared": "Yes or No if bounces > 0, else null",
+  "bounceLoanType": "Personal Loan, Business Loan, Home Loan, LAP, or Other if bounces > 0, else null",
+
   "enquiries": "enquiry count in last 3 months if mentioned or null",
   "enquiryLenders": "lender name(s) for those enquiries if mentioned or null",
   "qualificationStatus": "ELIGIBLE or DECLINED or IN_PROGRESS",
@@ -339,13 +343,33 @@ function checkRejection(session) {
     if (!isPLBL && cibil < 650) return "cibil_other";
   }
 
-  if (bounces >= 0) {
-    if (isPLBL && bounces > 0) return "bounces_plbl";
-    if (!isPLBL && bounces > 2) return "bounces_other";
+ if (bounces > 0) {
+    if (session.bounceCleared === null || session.bounceCleared === undefined) {
+      return ""; // don't decide yet — model needs to ask if cleared first
+    }
+    const cleared = session.bounceCleared.toString().toLowerCase() === "yes";
+    if (!cleared) {
+      if (isPLBL) return "bounces_plbl";
+      if (!isPLBL && bounces > 2) return "bounces_other";
+    }
   }
 
   return "";
 }
+
+function checkManualReview(session) {
+  const loanType = (session.loanType || "").toLowerCase();
+  const isPLBL   = loanType.indexOf("personal") !== -1 || loanType.indexOf("business") !== -1;
+  const bounces  = session.bounces != null ? parseInt(session.bounces) || 0 : 0;
+  const bounceLoanType = (session.bounceLoanType || "").toLowerCase();
+  const bounceWasUnsecured = bounceLoanType.indexOf("personal") !== -1 || bounceLoanType.indexOf("business") !== -1;
+
+  if (!isPLBL && bounces > 0 && bounceWasUnsecured) {
+    return "Prior bounce on " + (session.bounceLoanType || "an unsecured loan") + " — now applying for " + (session.loanType || "a secured loan") + ". Manual review recommended.";
+  }
+  return "";
+}
+
 
 function rejectMessageFor(reason) {
   const messages = {
@@ -388,7 +412,10 @@ function persistPartialFields(session, from) {
       "&pincode="        + encodeURIComponent(session.pincode        || "") +
       "&cibilScore="     + encodeURIComponent(session.cibilScore     || "") +
       "&loanAmount="     + encodeURIComponent(session.loanAmount     || "") +
-      "&bounces="        + encodeURIComponent(session.bounces != null ? session.bounces : "") +
+      "&bounces="         + encodeURIComponent(session.bounces != null ? session.bounces : "") +
+      "&bounceCleared="   + encodeURIComponent(session.bounceCleared  || "") +
+      "&bounceLoanType="  + encodeURIComponent(session.bounceLoanType || "") +
+
       "&enquiries="      + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
       "&enquiryLenders=" + encodeURIComponent(session.enquiryLenders || "")
     ).catch(e => console.error("persistPartialFields error:", e.message));
@@ -417,8 +444,11 @@ async function triggerCaseSummary(session, from) {
       "Loan Amount: " + (session.loanAmount || "-") + "\n" +
       (session.propertyDetails ? "Property Details: " + session.propertyDetails + "\n" : "") +
       "Bounces (6 mo): " + (session.bounces != null ? session.bounces : "-") + "\n" +
+      (session.bounces > 0 ? "Bounce Cleared: " + (session.bounceCleared || "-") + "\n" : "") +
+      (session.bounces > 0 ? "Bounce Loan Type: " + (session.bounceLoanType || "-") + "\n" : "") +
       "Enquiries (3 mo): " + (session.enquiries != null ? session.enquiries : "-") +
-      (session.enquiryLenders ? " (" + session.enquiryLenders + ")" : "");
+      (session.enquiryLenders ? " (" + session.enquiryLenders + ")" : "") +
+      (checkManualReview(session) ? "\n⚠️ MANUAL REVIEW: " + checkManualReview(session) : "");
 
     const payload = {
       action         : "case-summary",
@@ -457,6 +487,9 @@ async function triggerCaseSummary(session, from) {
       "&cibilScore="        + encodeURIComponent(session.cibilScore     || "") +
       "&loanAmount="        + encodeURIComponent(session.loanAmount     || "") +
       "&bounces="           + encodeURIComponent(session.bounces != null ? session.bounces : "") +
+      "&bounceCleared="     + encodeURIComponent(session.bounceCleared  || "") +
+      "&bounceLoanType="    + encodeURIComponent(session.bounceLoanType || "") +
+
       "&enquiries="         + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
       "&enquiryLenders="    + encodeURIComponent(session.enquiryLenders || "") +
       "&caseSummary="       + encodeURIComponent(briefText)
@@ -689,6 +722,8 @@ function newSession(overrides) {
     propertyDetails: null,
     cibilScore     : null,
     bounces        : null,
+    bounceCleared  : null,
+    bounceLoanType : null,
     enquiries      : null,
     enquiryLenders : null,
     partnerMode    : false,
@@ -1065,6 +1100,9 @@ app.post("/webhook", async function(req, res) {
     if (botResponse.companyType)     session.companyType    = botResponse.companyType;
     if (botResponse.cibilScore)      session.cibilScore     = botResponse.cibilScore;
     if (botResponse.bounces !== undefined && botResponse.bounces !== null) session.bounces = botResponse.bounces;
+    if (botResponse.bounceCleared)  session.bounceCleared  = botResponse.bounceCleared;
+    if (botResponse.bounceLoanType) session.bounceLoanType = botResponse.bounceLoanType;
+
     if (botResponse.enquiries !== undefined && botResponse.enquiries !== null) session.enquiries = botResponse.enquiries;
     if (botResponse.enquiryLenders)  session.enquiryLenders = botResponse.enquiryLenders;
 
@@ -1105,10 +1143,13 @@ app.post("/webhook", async function(req, res) {
     }
 
     // ── SEND REPLY — fixed closing flow overrides model output when case qualifies ──
+    const bounceCount = session.bounces != null ? parseInt(session.bounces) || 0 : null;
+    const bounceInfoComplete = bounceCount === 0 || (bounceCount > 0 && session.bounceCleared && session.bounceLoanType);
+
     const hasMinInfo = session.name && session.loanType && session.city &&
                        session.employmentType && session.cibilScore &&
                        session.loanAmount && session.bounces !== null &&
-                       session.enquiries !== null &&
+                       session.enquiries !== null && bounceInfoComplete &&
                        (session.employmentType !== "Self-Employed" || (session.gstDate && session.companyType));
 
     const willCloseCase = botResponse.sendCaseSummary && !session.caseSummarySent &&
@@ -1177,10 +1218,12 @@ app.post("/webhook", async function(req, res) {
     // ── TRIGGER CASE SUMMARY ─────────────────────────────
     if (willCloseCase) {
       session.caseSummarySent = true;
-      console.log("Case brief ready for: " + from);
-      await saveLeadToSheet(from, session.name, session.loanType, session.city, "Case Ready");
+      const manualNote = checkManualReview(session);
+      console.log("Case brief ready for: " + from + (manualNote ? " (flagged for manual review)" : ""));
+      await saveLeadToSheet(from, session.name, session.loanType, session.city, manualNote ? "Manual Decision" : "Case Ready");
       await triggerCaseSummary(session, from);
     }
+
 
     // ── HANDLE DECLINED (specialist explicitly declined mid-flow) ───
     if (botResponse.qualificationStatus === "DECLINED") {
