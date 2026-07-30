@@ -213,6 +213,7 @@ RESPONSE FORMAT — Always respond in this exact JSON only:
   "bounces": "bounce count if mentioned or null",
   "bounceCleared": "Yes or No if bounces > 0, else null",
   "bounceLoanType": "Personal Loan, Business Loan, Home Loan, LAP, or Other if bounces > 0, else null",
+
   "enquiries": "enquiry count in last 3 months if mentioned or null",
   "enquiryLenders": "lender name(s) for those enquiries if mentioned or null",
   "qualificationStatus": "ELIGIBLE or DECLINED or IN_PROGRESS",
@@ -342,7 +343,7 @@ function checkRejection(session) {
     if (!isPLBL && cibil < 650) return "cibil_other";
   }
 
-  if (bounces > 0) {
+ if (bounces > 0) {
     if (session.bounceCleared === null || session.bounceCleared === undefined) {
       return ""; // don't decide yet — model needs to ask if cleared first
     }
@@ -368,6 +369,7 @@ function checkManualReview(session) {
   }
   return "";
 }
+
 
 function rejectMessageFor(reason) {
   const messages = {
@@ -413,6 +415,7 @@ function persistPartialFields(session, from) {
       "&bounces="         + encodeURIComponent(session.bounces != null ? session.bounces : "") +
       "&bounceCleared="   + encodeURIComponent(session.bounceCleared  || "") +
       "&bounceLoanType="  + encodeURIComponent(session.bounceLoanType || "") +
+
       "&enquiries="      + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
       "&enquiryLenders=" + encodeURIComponent(session.enquiryLenders || "")
     ).catch(e => console.error("persistPartialFields error:", e.message));
@@ -486,6 +489,7 @@ async function triggerCaseSummary(session, from) {
       "&bounces="           + encodeURIComponent(session.bounces != null ? session.bounces : "") +
       "&bounceCleared="     + encodeURIComponent(session.bounceCleared  || "") +
       "&bounceLoanType="    + encodeURIComponent(session.bounceLoanType || "") +
+
       "&enquiries="         + encodeURIComponent(session.enquiries != null ? session.enquiries : "") +
       "&enquiryLenders="    + encodeURIComponent(session.enquiryLenders || "") +
       "&caseSummary="       + encodeURIComponent(briefText)
@@ -779,7 +783,7 @@ app.post("/webhook", async function(req, res) {
              (message.interactive && message.interactive.list_reply &&
               message.interactive.list_reply.title) || "Chat";
     } else {
-      await sendTextMessage(from, "Hi! 😊 Please send documents directly to our RM Manoj on his number instead of this chat:\n📱 9594592020\n\nHe'll review them right away!");
+      await sendTextMessage(from, "Thank you for sharing! 😊 Our team will review this.\n\nIf you have any questions please feel free to ask!");
       return;
     }
 
@@ -1098,6 +1102,7 @@ app.post("/webhook", async function(req, res) {
     if (botResponse.bounces !== undefined && botResponse.bounces !== null) session.bounces = botResponse.bounces;
     if (botResponse.bounceCleared)  session.bounceCleared  = botResponse.bounceCleared;
     if (botResponse.bounceLoanType) session.bounceLoanType = botResponse.bounceLoanType;
+
     if (botResponse.enquiries !== undefined && botResponse.enquiries !== null) session.enquiries = botResponse.enquiries;
     if (botResponse.enquiryLenders)  session.enquiryLenders = botResponse.enquiryLenders;
 
@@ -1219,6 +1224,7 @@ app.post("/webhook", async function(req, res) {
       await triggerCaseSummary(session, from);
     }
 
+
     // ── HANDLE DECLINED (specialist explicitly declined mid-flow) ───
     if (botResponse.qualificationStatus === "DECLINED") {
       await saveLeadToSheet(from, session.name, session.loanType, session.city, "Declined");
@@ -1248,4 +1254,4 @@ app.get("/", function(req, res) {
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, function() {
   console.log("🚀 VastMyWealth Relay running on port " + PORT);
-
+});
